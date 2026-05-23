@@ -13,6 +13,7 @@ const STAGE_TIMEOUT_MS = 8500;
 const OPTIONAL_STAGE_TIMEOUT_MS = 3000;
 const LEADERBOARD_RUN_LIMIT = 1200;
 const LIFETIME_RUN_LIMIT = 2500;
+const BURN_ROW_LIMIT = 2500;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timer: number | null = null;
@@ -76,13 +77,15 @@ function drawSlotToDisplaySlot(slot?: string | null): RaffleDisplaySlot | null {
 
 async function fetchPaginatedRows(admin: SupabaseClient, table: string, columns: string) {
   const pageSize = 1000;
+  const maxRows = BURN_ROW_LIMIT;
   const rows: Record<string, unknown>[] = [];
   let from = 0;
-  while (true) {
+  while (rows.length < maxRows) {
+    const to = Math.min(from + pageSize - 1, maxRows - 1);
     const { data, error } = await admin
       .from(table)
       .select(columns)
-      .range(from, from + pageSize - 1);
+      .range(from, to);
     if (error) return { rows: [], error };
     const batch = Array.isArray(data) ? data as Record<string, unknown>[] : [];
     rows.push(...batch);
@@ -122,7 +125,9 @@ Deno.serve(async (req) => {
     const runs = await runStage(requestId, 'fetchRunsForRange', () => withTimeout(fetchRunsForRange(admin, rangeSelection.selectedRange, rangeSelection.raffleType), STAGE_TIMEOUT_MS, 'fetchRunsForRange'));
     const lifetimeRuns = await runOptionalStage(requestId, 'fetchRecentLifetimeRuns', runs as RunRow[], () => fetchAllRuns(admin), 3500);
     const burnRows = await runOptionalStage(requestId, 'fetchBurnRowsForRange', [] as BurnRow[], () => fetchBurnRowsForRange(admin, rangeSelection.selectedRange), OPTIONAL_STAGE_TIMEOUT_MS);
-    const lifetimeBurnRows = await runOptionalStage(requestId, 'fetchAllBurnRows', [] as BurnRow[], () => fetchAllBurnRows(admin), OPTIONAL_STAGE_TIMEOUT_MS);
+    // Keep this bounded. The existing DFK Defender backend can accumulate a lot
+    // of burn history, and the public leaderboard should never scan it all.
+    const lifetimeBurnRows = burnRows;
     // Daily raffle removed; quest rewards are the only automated reward path.
 
 
@@ -575,25 +580,6 @@ function buildBurnSummary(burnRows: BurnRow[], runs: RunRow[]) {
   return { byWallet, total: Number(total.toFixed(3)), topBurner };
 }
 
-async function fetchAllBurnRows(admin: SupabaseClient) {
-  const selectVariants = [
-    'wallet_address, burn_amount, confirmed_at',
-    'wallet_address, amount, confirmed_at',
-    'wallet_address, tx_hash, burn_amount, confirmed_at',
-    'wallet_address, tx_hash, amount, confirmed_at',
-    'wallet_address, tx_hash, burn_amount, amount, confirmed_at',
-  ];
-
-  for (const columns of selectVariants) {
-    const result = await fetchPaginatedRows(admin, 'dfk_gold_burns', columns);
-    if (!result.error) return result.rows as BurnRow[];
-    if (isMissingColumnError(result.error) || isMissingRelationError(result.error)) continue;
-    throw result.error;
-  }
-
-  return [];
-}
-
 async function fetchBurnRowsForRange(admin: SupabaseClient, range: RangeWindow) {
   const selectVariants = [
     'wallet_address, burn_amount, confirmed_at',
@@ -620,7 +606,11 @@ async function fetchBurnRowsForRange(admin: SupabaseClient, range: RangeWindow) 
       throw result.error;
     }
 
-    let query = admin.from('dfk_gold_burns').select(columns);
+    let query = admin
+      .from('dfk_gold_burns')
+      .select(columns)
+      .order(columns.includes('confirmed_at') ? 'confirmed_at' : 'created_at', { ascending: false })
+      .limit(BURN_ROW_LIMIT);
     if (range.startTs && range.endTs) {
       query = query.gte('confirmed_at', range.startTs).lt('confirmed_at', range.endTs);
     } else {

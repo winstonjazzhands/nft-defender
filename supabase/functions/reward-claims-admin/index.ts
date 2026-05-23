@@ -9,6 +9,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const ADMIN_SECTION_ROW_LIMIT = Math.max(250, Math.min(2500, Number(Deno.env.get('REWARD_CLAIMS_ADMIN_ROW_LIMIT') || 1000) || 1000));
+
 function json(payload: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders } });
 }
@@ -257,12 +259,12 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
     safeSectionRows<any>('reward claims', 'reward_claim_requests', () => safeTableSelect<any>(admin.from('reward_claim_requests').select('*').order('requested_at', { ascending: false }).limit(limit), 'reward_claim_requests')),
     safeSectionRows<any>('reward whitelist', 'reward_claim_whitelist', () => safeTableSelect<any>(admin.from('reward_claim_whitelist').select('*'), 'reward_claim_whitelist')),
     safeSectionRows<any>('gold burns', 'dfk_gold_burns', () => safeTableSelect<any>(
-      admin.from('dfk_gold_burns').select('wallet_address, burn_amount, amount, confirmed_at').order('confirmed_at', { ascending: false }).limit(5000),
+      admin.from('dfk_gold_burns').select('wallet_address, burn_amount, amount, confirmed_at').order('confirmed_at', { ascending: false }).limit(ADMIN_SECTION_ROW_LIMIT),
       'dfk_gold_burns',
     )),
     safeSectionRows<any>('token payments', 'dfk_token_payments', async () => {
       const rows = await safeTableSelect<any>(
-        admin.from('dfk_token_payments').select('*').limit(5000),
+        admin.from('dfk_token_payments').select('*').limit(ADMIN_SECTION_ROW_LIMIT),
         'dfk_token_payments',
         { allowMissingColumns: ['verified_at', 'confirmed_at', 'updated_at', 'created_at'] },
       );
@@ -270,7 +272,7 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
     }),
     safeSectionRows<any>('token payment sessions', 'dfk_token_payment_sessions', async () => {
       const rows = await safeTableSelect<any>(
-        admin.from('dfk_token_payment_sessions').select('*').limit(5000),
+        admin.from('dfk_token_payment_sessions').select('*').limit(ADMIN_SECTION_ROW_LIMIT),
         'dfk_token_payment_sessions',
         { allowMissingColumns: ['verified_at', 'confirmed_at', 'updated_at', 'created_at'] },
       );
@@ -278,7 +280,7 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
     }),
     safeSectionRows<any>('crypto payment sessions', 'crypto_payment_sessions', async () => {
       const rows = await safeTableSelect<any>(
-        admin.from('crypto_payment_sessions').select('*').eq('status', 'confirmed').limit(5000),
+        admin.from('crypto_payment_sessions').select('*').eq('status', 'confirmed').limit(ADMIN_SECTION_ROW_LIMIT),
         'crypto_payment_sessions',
         { allowMissingColumns: ['verified_at', 'confirmed_at', 'updated_at', 'created_at'] },
       );

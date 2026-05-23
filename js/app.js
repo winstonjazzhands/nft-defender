@@ -7740,8 +7740,8 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     if (id === 'fewer') return { className: 'fewer', shortLabel: '15% fewer enemies', label: 'Wave RNG: 15% fewer enemies' };
     if (id === 'double_gold') return { className: 'double-gold', shortLabel: '2x gold', label: 'Wave RNG: base enemies with 2x gold drops' };
     if (id === 'gold_drop') return { className: 'gold-drop', shortLabel: '50x wave gold', label: 'Wave RNG: base enemies with instant bonus gold' };
-    if (id === 'base' || id === 'base_multiwave') return { className: 'base', shortLabel: 'base enemy count', label: 'Wave RNG: base enemy count' };
-    return { className: 'pending', shortLabel: 'roll pending', label: 'Wave RNG: rolls when the next wave starts' };
+    if (id === 'base' || id === 'base_multiwave') return { className: '', shortLabel: 'base enemy count', label: 'Wave RNG: base enemy count' };
+    return { className: '', shortLabel: 'roll pending', label: 'Wave RNG: rolls when the next wave starts' };
   }
 
   function getDamageReportOwnerTower(tower) {
@@ -8161,19 +8161,40 @@ function renderDamageReport() {
     const padY = style ? ((parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)) : 0;
     const viewportWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
     const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-    const leftOverlap = getBoardResizeLeftMenuWidth();
     const centerWidth = Math.max(0, Math.round(((rect && rect.width) || center.clientWidth || 0) - padX));
-    const centerHeight = Math.max(0, Math.round(((rect && rect.height) || center.clientHeight || 0) - padY));
-    const centerRight = rect ? Number(rect.right || 0) : 0;
-    const rightRoom = Math.max(0, Number(viewportWidth || 0) - centerRight - 12);
+    const rawCenterHeight = Math.max(0, Math.round(((rect && rect.height) || center.clientHeight || 0) - padY));
+    const gridRect = els.grid.getBoundingClientRect ? els.grid.getBoundingClientRect() : null;
+    const bottomLimit = Math.max(0, Math.min(
+      Number(viewportHeight || 0) - 12,
+      rect ? Number(rect.bottom || 0) - (style ? (parseFloat(style.paddingBottom) || 0) : 0) : Number(viewportHeight || 0) - 12
+    ));
+    const gridTop = gridRect ? Number(gridRect.top || 0) : (rect ? Number(rect.top || 0) + padY : 0);
+    const centerHeight = Math.max(0, Math.round((bottomLimit && gridTop) ? (bottomLimit - gridTop) : rawCenterHeight));
     const fallbackWidth = Math.max(320, Number(viewportWidth || 0) - 340);
     const fallbackHeight = Math.max(180, Number(viewportHeight || 0) - 210);
-    const viewportCap = Math.max(240, Math.round(Number(viewportWidth || fallbackWidth) - 12));
-    const slideUnderWidth = Math.max(centerWidth, centerWidth + leftOverlap + rightRoom);
     return {
-      width: Math.max(240, Math.min(viewportCap, slideUnderWidth || fallbackWidth)),
+      width: Math.max(240, centerWidth || fallbackWidth),
       height: Math.max(150, centerHeight || fallbackHeight),
-      leftOverlap,
+      leftOverlap: 0,
+    };
+  }
+
+  function measureAutoBoardSize(bounds, naturalSize) {
+    const width = Math.max(1, Number(bounds && bounds.width) || 0);
+    const height = Math.max(1, Number(bounds && bounds.height) || 0);
+    if (!els.grid || isLandscapeMobileUi()) return naturalSize;
+    const style = window.getComputedStyle ? window.getComputedStyle(els.grid) : null;
+    const rawGap = style ? (parseFloat(style.columnGap || style.gap || '') || 0) : 0;
+    const gap = Math.max(0, Number.isFinite(rawGap) ? rawGap : 0);
+    const sizeFromWidth = Math.floor((width - ((WIDTH - 1) * gap)) / WIDTH);
+    const sizeFromHeight = Math.floor((height - ((HEIGHT - 1) * gap)) / HEIGHT);
+    const currentTile = Math.max(1, Math.round((((naturalSize && naturalSize.width) || 1) - ((WIDTH - 1) * gap)) / WIDTH));
+    const maxTile = Math.max(72, Math.round(currentTile * 1.5));
+    const tileSize = Math.max(34, Math.min(maxTile, sizeFromWidth, sizeFromHeight));
+    if (!Number.isFinite(tileSize) || tileSize <= 0) return naturalSize;
+    return {
+      width: Math.round((tileSize * WIDTH) + ((WIDTH - 1) * gap)),
+      height: Math.round((tileSize * HEIGHT) + ((HEIGHT - 1) * gap)),
     };
   }
 
@@ -8208,8 +8229,9 @@ function renderDamageReport() {
     const heightPercent = clampBoardResizePercent(settings.height);
     const bounds = findBoardResizeBounds();
     const base = measureNaturalBoardSize();
-    const targetWidth = Math.min(bounds.width, Math.round(base.width * (widthPercent / 100)));
-    const targetHeight = Math.min(bounds.height, Math.round(base.height * (heightPercent / 100)));
+    const fitBase = measureAutoBoardSize(bounds, base);
+    const targetWidth = Math.min(bounds.width, Math.round(fitBase.width * (widthPercent / 100)));
+    const targetHeight = Math.min(bounds.height, Math.round(fitBase.height * (heightPercent / 100)));
     const extraWidth = Math.max(0, targetWidth - base.width);
     const leftShift = Math.min(Math.max(0, Number(bounds.leftOverlap || 0)), Math.round(extraWidth));
     const center = els.grid.closest('#gameboard, .gameboard, .center-panel, main') || els.grid.parentElement || null;
@@ -8218,7 +8240,13 @@ function renderDamageReport() {
     els.grid.style.setProperty('width', `${targetWidth}px`, 'important');
     els.grid.style.setProperty('height', `${targetHeight}px`, 'important');
     els.grid.style.setProperty('max-width', `${bounds.width}px`, 'important');
-    els.grid.style.setProperty('margin-left', `${-leftShift}px`, 'important');
+    if (leftShift > 0) {
+      els.grid.style.setProperty('margin-left', `${-leftShift}px`, 'important');
+      els.grid.style.setProperty('margin-right', '0px', 'important');
+    } else {
+      els.grid.style.setProperty('margin-left', 'auto', 'important');
+      els.grid.style.setProperty('margin-right', 'auto', 'important');
+    }
     els.grid.style.setProperty('position', 'relative', 'important');
     els.grid.style.setProperty('z-index', '1', 'important');
     els.grid.style.setProperty('overflow', 'visible', 'important');
@@ -13829,8 +13857,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       els.waveCount.textContent = `${game.waveNumber} \u2022 ${waveRngMeta.shortLabel}`;
       const wavePill = els.waveCount.closest('.hud-pill') || els.waveCount.parentElement;
       if (wavePill) {
-        wavePill.classList.remove('wave-rng-pill-base', 'wave-rng-pill-more', 'wave-rng-pill-fewer', 'wave-rng-pill-double-gold', 'wave-rng-pill-gold-drop', 'wave-rng-pill-pending');
-        wavePill.classList.add(`wave-rng-pill-${waveRngMeta.className}`);
+        wavePill.classList.remove('wave-rng-pill-more', 'wave-rng-pill-fewer', 'wave-rng-pill-double-gold', 'wave-rng-pill-gold-drop');
+        if (waveRngMeta.className) wavePill.classList.add(`wave-rng-pill-${waveRngMeta.className}`);
         wavePill.title = waveRngMeta.label;
       }
     }
@@ -14718,7 +14746,18 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     if (game.walletHeroLoadPending) return;
     const currentAutoLoadKey = `${String(address || '').toLowerCase()}::${Number(getConnectedWalletChainId() || 0)}`;
     if (!force && game.walletHeroAutoLoadedKey === currentAutoLoadKey) return;
-    const loadedCachedRoster = await loadCachedWalletHeroRoster(address);
+    game.walletHeroLoadPending = true;
+    game.walletHeroLoadError = '';
+    game.walletHeroScanDoneVisibleUntil = 0;
+    startWalletHeroScanRunner();
+    renderWalletHeroScanStatus();
+    renderWalletHeroBonusPanel();
+    let loadedCachedRoster = false;
+    try {
+      loadedCachedRoster = await loadCachedWalletHeroRoster(address);
+    } catch (error) {
+      console.info('[wallet-hero-cache] cached hero load skipped', error && error.message ? error.message : error);
+    }
     if (loadedCachedRoster && !force) {
       game.walletHeroLoadError = '';
       game.walletHeroScanDoneVisibleUntil = 0;
@@ -14729,14 +14768,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     }
     if (!window.ethers) {
       if (!loadedCachedRoster) clearWalletHeroData();
+      game.walletHeroLoadPending = false;
+      showWalletHeroScanDoneNotice();
+      renderWalletHeroBonusPanel();
       return;
     }
-    game.walletHeroLoadPending = true;
-    game.walletHeroLoadError = '';
-    game.walletHeroScanDoneVisibleUntil = 0;
-    startWalletHeroScanRunner();
-    renderWalletHeroScanStatus();
-    renderWalletHeroBonusPanel();
     try {
       const heroesByKey = new Map();
       const chainErrors = [];
@@ -22053,6 +22089,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       isBoss: false,
       slowResistance: 0,
       isBossWaveSkitter: false,
+      spriteColorScale: Math.floor(Math.random() * 15) + 1,
     };
   }
 
@@ -25360,6 +25397,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         dot.style.background = 'transparent';
         dot.style.boxShadow = 'none';
         dot.style.zIndex = '7';
+        if (enemy.type !== 'skitter') dot.style.filter = getEnemySpriteColorFilter(enemy, 'summoner-assistant');
       } else if (useBruteSprite) {
         dot.src = 'assets/paladin.gif';
         dot.alt = '';
@@ -25372,6 +25410,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         dot.style.background = 'transparent';
         dot.style.boxShadow = 'none';
         dot.style.zIndex = '7';
+        dot.style.filter = getEnemySpriteColorFilter(enemy, 'paladin');
       }
       if (useImageSprite && !enemy.isBoss) {
         const spriteTranslateY = useBruteSprite ? '-58%' : '-56%';
@@ -25436,14 +25475,41 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   }
 
   function getBossVisualFilter(enemy) {
-    const phase = getBossVisualPhaseIndex(game.waveNumber);
+    return 'none';
+  }
+
+  function getEnemySpriteColorScale(enemy) {
+    if (!enemy) return 1;
+    let scale = Math.round(Number(enemy.spriteColorScale || 0));
+    if (!Number.isFinite(scale) || scale < 1 || scale > 15) {
+      scale = Math.floor(Math.random() * 15) + 1;
+      enemy.spriteColorScale = scale;
+    }
+    return scale;
+  }
+
+  function getEnemySpriteColorFilter(enemy, spriteKind) {
+    const scale = getEnemySpriteColorScale(enemy);
     const filters = [
       'brightness(1) saturate(1) contrast(1)',
-      'brightness(0.95) saturate(7.5) sepia(0.95) hue-rotate(-18deg) contrast(1.02)',
-      'brightness(1.02) saturate(7.2) sepia(0.98) hue-rotate(12deg) contrast(1.04)',
-      'brightness(0.96) saturate(6.1) sepia(0.95) hue-rotate(238deg) contrast(1.03)'
+      'brightness(1.02) saturate(1.10) hue-rotate(-12deg) contrast(1.02)',
+      'brightness(0.98) saturate(1.16) hue-rotate(10deg) contrast(1.03)',
+      'brightness(1.04) saturate(1.08) hue-rotate(22deg) contrast(1.01)',
+      'brightness(0.97) saturate(1.22) hue-rotate(-28deg) contrast(1.04)',
+      'brightness(1.05) saturate(1.14) hue-rotate(42deg) contrast(1.02)',
+      'brightness(0.96) saturate(1.18) hue-rotate(-48deg) contrast(1.03)',
+      'brightness(1.03) saturate(1.20) hue-rotate(68deg) contrast(1.02)',
+      'brightness(0.99) saturate(1.26) hue-rotate(-72deg) contrast(1.04)',
+      'brightness(1.06) saturate(1.12) sepia(0.10) hue-rotate(90deg) contrast(1.01)',
+      'brightness(0.95) saturate(1.18) sepia(0.08) hue-rotate(-96deg) contrast(1.05)',
+      'brightness(1.04) saturate(1.24) hue-rotate(128deg) contrast(1.02)',
+      'brightness(0.98) saturate(1.30) hue-rotate(-136deg) contrast(1.04)',
+      'brightness(1.07) saturate(1.15) sepia(0.12) hue-rotate(166deg) contrast(1.02)',
+      'brightness(0.96) saturate(1.28) sepia(0.10) hue-rotate(-172deg) contrast(1.04)',
     ];
-    return filters[phase] || filters[0];
+    const base = filters[Math.max(0, Math.min(filters.length - 1, scale - 1))] || filters[0];
+    if (spriteKind === 'paladin') return `${base} drop-shadow(0 0 7px rgba(255,255,255,0.24))`;
+    return `${base} drop-shadow(0 1px 2px rgba(0,0,0,0.4))`;
   }
 
   function getPackbocSpritePath(enemy) {
@@ -26635,11 +26701,16 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     .live-damage-report.hidden { display: none; }
     .wave-roll-notice { position: absolute; transform: translateX(-50%); width: min(65%, 1120px); max-width: calc(100% - 24px); margin: 0; padding: 12px 16px; border: 1px solid rgba(255, 241, 107, 0.55); border-radius: 12px; background: linear-gradient(135deg, rgba(37, 20, 76, 0.96), rgba(127, 92, 0, 0.88)); color: #fff6b8; font-size: 20px; line-height: 1.25; font-weight: 900; text-align: center; text-shadow: 0 2px 0 rgba(0,0,0,0.55), 0 0 12px rgba(255, 241, 107, 0.28); box-shadow: 0 0 18px rgba(255, 241, 107, 0.24), inset 0 1px 0 rgba(255,255,255,0.08); z-index: 80; pointer-events: none; }
     .wave-roll-notice.hidden { display: none !important; }
-    .wave-rng-pill-base, .wave-rng-pill-pending { background: linear-gradient(135deg, rgba(116,119,127,0.58), rgba(32,36,45,0.88)) !important; border-color: rgba(190,196,210,0.48) !important; color: #f7f0d3 !important; }
     .wave-rng-pill-more { background: linear-gradient(135deg, rgba(255,79,79,0.62), rgba(90,8,8,0.92)) !important; border-color: rgba(255,130,130,0.72) !important; color: #fff4f4 !important; }
     .wave-rng-pill-fewer { background: linear-gradient(135deg, rgba(109,255,155,0.55), rgba(12,91,39,0.92)) !important; border-color: rgba(139,255,174,0.72) !important; color: #effff3 !important; }
     .wave-rng-pill-double-gold { background: linear-gradient(135deg, rgba(255,184,74,0.62), rgba(133,66,0,0.94)) !important; border-color: rgba(255,209,106,0.75) !important; color: #fff7d4 !important; }
     .wave-rng-pill-gold-drop { background: linear-gradient(135deg, rgba(196,124,255,0.62), rgba(64,20,132,0.94)) !important; border-color: rgba(214,161,255,0.78) !important; color: #fbf3ff !important; }
+    .gold-earned-pulse { animation: gold-earned-pill-flash 760ms ease-out; }
+    @keyframes gold-earned-pill-flash {
+      0% { background: rgba(20,28,44,0.9); border-color: #2e3d58; box-shadow: none; color: inherit; }
+      28% { background: linear-gradient(135deg, rgba(255,216,89,0.95), rgba(161,94,0,0.96)); border-color: rgba(255,235,125,0.95); box-shadow: 0 0 20px rgba(255,216,89,0.72), inset 0 0 14px rgba(255,255,210,0.24); color: #fff9cf; }
+      100% { background: rgba(20,28,44,0.9); border-color: #2e3d58; box-shadow: none; color: inherit; }
+    }
     .live-damage-report-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
     .live-damage-report-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
     .live-damage-report-kicker { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(214, 197, 151, 0.74); }

@@ -3543,6 +3543,31 @@ body{
 .footer-topbar .hud-pill-wave { min-width: 90px; }
 .footer-topbar .hud-pill strong { margin-right: 4px; }
 
+.gold-earned-pulse {
+  animation: gold-earned-pill-flash 760ms ease-out;
+}
+
+@keyframes gold-earned-pill-flash {
+  0% {
+    background: rgba(20, 28, 44, 0.9);
+    border-color: #2e3d58;
+    box-shadow: none;
+    color: inherit;
+  }
+  28% {
+    background: linear-gradient(135deg, rgba(255, 216, 89, 0.95), rgba(161, 94, 0, 0.96));
+    border-color: rgba(255, 235, 125, 0.95);
+    box-shadow: 0 0 20px rgba(255, 216, 89, 0.72), inset 0 0 14px rgba(255, 255, 210, 0.24);
+    color: #fff9cf;
+  }
+  100% {
+    background: rgba(20, 28, 44, 0.9);
+    border-color: #2e3d58;
+    box-shadow: none;
+    color: inherit;
+  }
+}
+
 .controls-stack {
   display: flex;
   flex-direction: column;

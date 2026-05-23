@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 type RowLike = Record<string, unknown>;
+const TREASURY_ROW_LIMIT = Math.max(250, Math.min(2500, Number(Deno.env.get('TREASURY_SUMMARY_ROW_LIMIT') || 1000) || 1000));
 
 function createAdmin() {
   return createClient(
@@ -254,8 +255,9 @@ async function fetchPaginatedRows(admin: ReturnType<typeof createAdmin>, relatio
   const rows: any[] = [];
   const pageSize = 1000;
   let from = 0;
-  while (true) {
-    let query: any = admin.from(relationName).select(columns).range(from, from + pageSize - 1);
+  while (rows.length < TREASURY_ROW_LIMIT) {
+    const to = Math.min(from + pageSize - 1, TREASURY_ROW_LIMIT - 1);
+    let query: any = admin.from(relationName).select(columns).range(from, to);
     if (apply) query = apply(query);
     const { data, error } = await query;
     if (error) {
@@ -264,7 +266,7 @@ async function fetchPaginatedRows(admin: ReturnType<typeof createAdmin>, relatio
     }
     const batch = Array.isArray(data) ? data : [];
     rows.push(...batch);
-    if (batch.length < pageSize) break;
+    if (batch.length < pageSize || rows.length >= TREASURY_ROW_LIMIT) break;
     from += pageSize;
   }
   return rows;
@@ -402,7 +404,6 @@ Deno.serve(async (req) => {
       tokenSessionRows,
       rewardClaimRows,
       burnRows,
-      { count: lifetimeTrackedRunsCount, error: runCountError },
     ] = await Promise.all([
       fetchPaginatedRows(admin, 'crypto_payment_sessions', '*', (query) => query.eq('status', 'confirmed')),
       fetchPaginatedRows(admin, 'avax_payment_verifications', '*'),
@@ -410,10 +411,7 @@ Deno.serve(async (req) => {
       fetchPaginatedRows(admin, 'dfk_token_payment_sessions', '*'),
       fetchPaginatedRows(admin, 'reward_claim_requests', '*'),
       fetchPaginatedBurnRows(admin),
-      admin.from('runs').select('id', { count: 'exact', head: true }),
     ]);
-
-    logNonMissingError('avax-treasury-summary runs count query failed', runCountError, 'runs');
 
     const safeSessionRows = dedupeAvaxRows(sessionRows || [], legacyAvaxRows || []);
     const safeTokenRows = mergeTokenRows(tokenRows || [], tokenSessionRows || []);
@@ -447,7 +445,7 @@ Deno.serve(async (req) => {
     const completedOutgoingRows = completedRewardClaims;
 
     const todayBurnRows = safeBurnRows.filter((row) => String(row.confirmed_at || '').slice(0, 10) === today);
-    const lifetimeTrackedRuns = Math.max(0, Number((runCountError && !isMissingRelationError(runCountError, 'runs')) ? 0 : (lifetimeTrackedRunsCount || 0)));
+    const lifetimeTrackedRuns = 0;
     const lifetimeBurnedGold = safeBurnRows.reduce((total, row) => total + (Number(row.burn_amount ?? row.amount ?? 0) || 0), 0);
     const todayBurnedGold = todayBurnRows.reduce((total, row) => total + (Number(row.burn_amount ?? row.amount ?? 0) || 0), 0);
 
@@ -511,6 +509,8 @@ Deno.serve(async (req) => {
         tokenSessionsWithTxHash: (Array.isArray(tokenSessionRows) ? tokenSessionRows : []).filter((row) => !!String(row?.tx_hash || row?.metadata?.txHash || row?.metadata?.transactionHash || '').trim()).length,
         rewardClaimRows: safeRewardClaimRows.length,
         burnRows: safeBurnRows.length,
+        rowLimit: TREASURY_ROW_LIMIT,
+        lifetimeTrackedRunsSkipped: true,
       },
     });
   } catch (error) {
