@@ -39,8 +39,17 @@ verify_jwt = false
 [functions.request-reward-claim]
 verify_jwt = false
 
+[functions.axie-metadata]
+verify_jwt = false
+
 [functions.create-dfk-token-session]
 verify_jwt = false
 
 [functions.verify-dfk-token-payment]
+verify_jwt = false
+
+[functions.avax-treasury-summary]
+verify_jwt = false
+
+[functions.reward-claims-admin]
 verify_jwt = false

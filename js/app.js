@@ -565,9 +565,13 @@ function getRandomTree(){
     mythic: { label: 'Mythic', className: 'relic-rarity-mythic', color: '#d06dff' },
   };
   const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
-  const PRIVATE_ADMIN_WALLETS = Object.freeze((Array.isArray(window.DFK_PRIVATE_ADMIN_WALLETS) && window.DFK_PRIVATE_ADMIN_WALLETS.length
-    ? window.DFK_PRIVATE_ADMIN_WALLETS
-    : ['0xab45288409900be5ef23c19726a30c28268495ad', '0x971bdacd04ef40141ddb6ba175d4f76665103c81', '0xbA42e89b2f69C68E79898ba73D9A4Eb13D25c70e']).map(address => String(address || '').trim().toLowerCase()).filter(Boolean));
+  const DFK_PAYOUTS_TREASURY_WALLET = '0xab45288409900be5ef23c19726a30c28268495ad';
+  const PRIVATE_ADMIN_WALLETS = Object.freeze(Array.from(new Set([
+    ...(Array.isArray(window.DFK_PRIVATE_ADMIN_WALLETS) && window.DFK_PRIVATE_ADMIN_WALLETS.length
+      ? window.DFK_PRIVATE_ADMIN_WALLETS
+      : ['0x971bdacd04ef40141ddb6ba175d4f76665103c81', '0xbA42e89b2f69C68E79898ba73D9A4Eb13D25c70e']),
+    DFK_PAYOUTS_TREASURY_WALLET,
+  ].map(address => String(address || '').trim().toLowerCase()).filter(Boolean))));
   const TEST_GOLD_ADMIN_WALLETS = Object.freeze((Array.isArray(window.DFK_TEST_GOLD_WALLETS) && window.DFK_TEST_GOLD_WALLETS.length
     ? window.DFK_TEST_GOLD_WALLETS
     : PRIVATE_ADMIN_WALLETS).map(address => String(address || '').trim().toLowerCase()).filter(Boolean));
@@ -575,7 +579,7 @@ function getRandomTree(){
     ? window.DFK_LIVE_DAMAGE_REPORT_WALLETS
     : PRIVATE_ADMIN_WALLETS).map(address => String(address || '').trim().toLowerCase()).filter(Boolean));
   const PLAYER_START_WAVE_OPTIONS = Object.freeze([1, 10, 20, 30, 40]);
-  const PAID_START_WAVE_MIN = 20;
+  const PAID_START_WAVE_MIN = 30;
   const START_WAVE_JEWEL_COST = 1;
   const MOOSIFER_FREE_RETRY_LIMIT = 2;
   const TEST_GOLD_GRANT_AMOUNT = 10000;
@@ -644,7 +648,7 @@ const SOUL_SPLIT_CHARGE_WAVE_INTERVAL = 15;
   const GLOBAL_REMAINING_ENEMY_HP_BALANCE_MULTIPLIER = 1.60;
   const NORMAL_ENEMY_BASE_HP_MULTIPLIER = 1.05;
   const GLOBAL_NON_BOSS_ENEMY_SPEED_MULTIPLIER = 0.90;
-  const GLOBAL_ENEMY_DAMAGE_MULTIPLIER = 0.85;
+  const GLOBAL_ENEMY_DAMAGE_MULTIPLIER = 0.8075;
   const GLOBAL_NON_BOSS_ENEMY_DAMAGE_MULTIPLIER = 1.1025;
   const GLOBAL_BIG_ENEMY_COUNT_MULTIPLIER = 0.85;
   const GLOBAL_BIG_ENEMY_HP_MULTIPLIER = 1.15;
@@ -676,6 +680,8 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
   const SAGE_PETAL_STORM_IMAGE_PATH = 'assets/rose-petals.png';
   const RED_FIRE_GIF_PATH = 'assets/red-fire.gif';
   const PURPLE_FIRE_GIF_PATH = 'assets/purple-fire.gif';
+  const FLYING_DEMON_MOVE_GIF_PATH = 'assets/flying-demon-m.gif';
+  const FLYING_DEMON_ATTACK_GIF_PATH = 'assets/flying-demon-a.gif';
   const FIREBALL_GIF_PATH = 'assets/fireball-flame-ball.png';
   const CANNONBALL_IMAGE_PATH = 'assets/cannonball.png';
   const DRAGOON_SPEAR_SWING_IMAGE_PATH = 'assets/swinging-dragoon-spear.png';
@@ -744,7 +750,7 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     warrior: {
       name: 'Warrior',
       letter: 'WAR',
-      hp: 1240,
+      hp: 1302,
       damage: 51.775,
       attackInterval: 1.33,
       range: 1,
@@ -1476,6 +1482,8 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     startWavePaymentPendingPromise: null,
     startWavePaymentCompletedWave: 0,
     startWaveExtraHeroGranted: false,
+    skyTerrorIntroShownForRun: false,
+    skyTerrorFightReady: false,
     bypassGuestConnectConfirmOnce: false,
     bypassGuestConnectRestartOnce: false,
     milestoneJewelsGranted: {},
@@ -1629,6 +1637,12 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     damageReportExpandedTowerIds: {},
     waveRollNoticeTimer: null,
     currentWaveRngRoll: null,
+    forcedNextWaveVarianceId: '',
+    d20RollPending: false,
+    d20RollsApplied: {},
+    d20TemporaryBuffs: [],
+    d20GuardianWardUntilWave: 0,
+    nextHeroHireHalfPrice: false,
     bountyBoard: {
       loading: false,
       claiming: false,
@@ -1706,7 +1720,7 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
   const DAILY_QUEST_GOAL_MULTIPLIER = 5.625;
   const DAILY_QUEST_BOARD_VERSION = 5;
   const DAILY_QUEST_TIER_CONFIG = Object.freeze({
-    free: Object.freeze({ rewardJewel: 0, rewardText: '0 Jewel', rewardAvax: 0, goalMultiplier: 0.75, count: 5, unlocksRewardedQuests: true, tierLabel: 'Phase 1' }),
+    free: Object.freeze({ rewardJewel: 0, rewardText: '0 Jewel', rewardAvax: 0, goalMultiplier: 0.75, count: 4, unlocksRewardedQuests: true, tierLabel: 'Phase 1' }),
     standard: Object.freeze({ rewardJewel: 2, rewardText: '2 Jewel', rewardAvax: 0.0006, goalMultiplier: 1.5, count: 3, requiresFreeCompletion: true, tierLabel: 'Phase 2' }),
     elite: Object.freeze({ rewardJewel: 3, rewardText: '3 Jewel', rewardAvax: 0.00125, goalMultiplier: 3, count: 2, requiresFreeCompletion: true, tierLabel: 'Phase 2' }),
     bounty: Object.freeze({ rewardJewel: 20, rewardText: '20 Jewel', rewardAvax: 0.005, goalMultiplier: 30, count: 0, requiresFreeCompletion: true, sequentialUnlock: true, tierLabel: 'Bounty' }),
@@ -1919,20 +1933,25 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     return sourceIds.map((sourceId) => {
       const quest = DAILY_QUEST_BASE_MAP[sourceId];
       if (!quest) return null;
-      const scaledGoal = sourceId === 'wave_peak_30'
+      const replacesPeakWaveQuest = String(sourceId || '').startsWith('wave_peak_');
+      const originalScaledGoal = sourceId === 'wave_peak_30'
         ? 60
         : Math.max(1, Math.ceil(Number(quest.goal || 0) * DAILY_QUEST_GOAL_MULTIPLIER * Number(tierMeta.goalMultiplier || 1)));
+      const questMetric = replacesPeakWaveQuest ? 'wavesClearedTotal' : quest.metric;
+      const scaledGoal = replacesPeakWaveQuest ? Math.max(1, Math.ceil(Number(quest.goal || 0) * 5)) : originalScaledGoal;
+      const displayQuest = replacesPeakWaveQuest ? { ...quest, metric: questMetric } : quest;
       return {
         ...quest,
         id: `${tierKey}:${quest.id}`,
         sourceId: quest.id,
+        metric: questMetric,
         tierKey,
         tierLabel: tierMeta.tierLabel,
         rewardJewel: Number(tierMeta.rewardJewel || 0),
         rewardAvax: Number(tierMeta.rewardAvax || 0),
         rewardText: tierMeta.rewardText,
         goal: scaledGoal,
-        description: buildDailyQuestDescription(quest, scaledGoal),
+        description: buildDailyQuestDescription(displayQuest, scaledGoal),
         requiresFreeCompletion: !!tierMeta.requiresFreeCompletion,
         unlocksRewardedQuests: !!tierMeta.unlocksRewardedQuests,
       };
@@ -2375,9 +2394,9 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     buildWeeklyBounty({ id: 'support_heal_150k', title: 'Heal 150,000 total HP with support heroes', detail: 'Restore 150,000 total HP with support heroes.', metric: 'supportHealing', metricLabel: 'Support healing', category: 'hero', categoryLabel: 'Hero Usage / Performance', goal: 150000, difficulty: 'medium' }),
     buildWeeklyBounty({ id: 'manual_trigger_1400_abilities', title: 'Manually trigger hero abilities 1,400 times', detail: 'Manually trigger 1,400 hero abilities this week.', metric: 'manualHeroAbilityTriggers', metricLabel: 'Manual abilities triggered', category: 'hero', categoryLabel: 'Hero Usage / Performance', goal: 1400, difficulty: 'medium' }),
     buildWeeklyBounty({ id: 'hero_alive_300_waves', title: 'Keep a hero alive for 300 waves total', detail: 'Stack up 300 hero-alive wave counts.', metric: 'heroAliveWaves', metricLabel: 'Hero-alive waves', category: 'hero', categoryLabel: 'Hero Usage / Performance', goal: 300, difficulty: 'medium' }),
-    buildWeeklyBounty({ id: 'complete_550_past_20', title: 'Complete 550 waves past wave 20', detail: 'Finish 550 waves numbered 21 or higher.', metric: 'wavesPast20', metricLabel: 'Waves beyond 20', category: 'progression', categoryLabel: 'Wave / Progression', goal: 550, difficulty: 'medium' }),
-    buildWeeklyBounty({ id: 'complete_350_threewave', title: 'Complete 350 waves during 3-wave pressure', detail: 'Complete 350 waves with three live waves.', metric: 'wavesMulti3', metricLabel: '3-wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 3000, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.2 }),
-    buildWeeklyBounty({ id: 'complete_750_multiwave', title: 'Complete 750 waves during multi-wave (2+)', detail: 'Complete 750 waves while 2+ live waves are active.', metric: 'wavesMulti2', metricLabel: '2+ wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 750, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.25 }),
+    buildWeeklyBounty({ id: 'complete_550_past_20', title: 'Complete 105 waves past wave 20', detail: 'Finish 105 waves numbered 21 or higher.', metric: 'wavesPast20', metricLabel: 'Waves beyond 20', category: 'progression', categoryLabel: 'Wave / Progression', goal: 105, difficulty: 'medium' }),
+    buildWeeklyBounty({ id: 'complete_350_threewave', title: 'Complete 110 waves during 3-wave pressure', detail: 'Complete 110 waves with three live waves.', metric: 'wavesMulti3', metricLabel: '3-wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 110, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.2 }),
+    buildWeeklyBounty({ id: 'complete_750_multiwave', title: 'Complete 115 waves during multi-wave (2+)', detail: 'Complete 115 waves while 2+ live waves are active.', metric: 'wavesMulti2', metricLabel: '2+ wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 115, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.25 }),
     buildWeeklyBounty({ id: 'defeat_4500_threewave', title: 'Defeat 4,500 enemies during 3-wave pressure', detail: 'Defeat 4,500 enemies while three live waves are active.', metric: 'killsMulti3', metricLabel: '3-wave kills', category: 'combat', categoryLabel: 'Combat / Kill-Based', goal: 4500, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.2 }),
     buildWeeklyBounty({ id: 'trigger_1500_multiwave_bonus', title: 'Trigger multi-wave bonus 1,500 times', detail: 'Trigger the multi-wave bonus 1,500 times this week.', metric: 'multiWaveBonusTriggers', metricLabel: 'Bonus triggers', category: 'progression', categoryLabel: 'Wave / Progression', goal: 1500, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.3 }),
     buildWeeklyBounty({ id: 'spend_200k_gold', title: 'Spend 200,000 gold', detail: 'Spend 200,000 gold this week.', metric: 'goldSpent', metricLabel: 'Gold spent', category: 'economy', categoryLabel: 'Economy / Activity', goal: 200000, difficulty: 'medium' }),
@@ -2385,9 +2404,9 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     buildWeeklyBounty({ id: 'hire_10_heroes', title: 'Hire 10 heroes', detail: 'Hire 10 heroes this week.', metric: 'heroesHired', metricLabel: 'Heroes hired', category: 'economy', categoryLabel: 'Economy / Activity', goal: 10, difficulty: 'medium' }),
     buildWeeklyBounty({ id: 'open_150_relic_choices', title: 'Open 150 relic choices', detail: 'Open 150 relic choice windows this week.', metric: 'relicChoicesOpened', metricLabel: 'Relic choices opened', category: 'economy', categoryLabel: 'Economy / Activity', goal: 150, difficulty: 'medium' }),
     buildWeeklyBounty({ id: 'defeat_75_bosses', title: 'Defeat 75 boss enemies', detail: 'Defeat 75 boss enemies this week.', metric: 'killsBoss', metricLabel: 'Bosses defeated', category: 'combat', categoryLabel: 'Combat / Kill-Based', goal: 75, difficulty: 'heavy' }),
-    buildWeeklyBounty({ id: 'complete_150_past_30', title: 'Complete 150 waves past wave 30', detail: 'Finish 150 waves numbered 31 or higher.', metric: 'wavesPast30', metricLabel: 'Waves beyond 30', category: 'progression', categoryLabel: 'Wave / Progression', goal: 150, difficulty: 'heavy' }),
-    buildWeeklyBounty({ id: 'complete_1100_waves', title: 'Complete 1,100 waves', detail: 'Finish 1,100 waves this week.', metric: 'wavesCompleted', metricLabel: 'Waves completed', category: 'progression', categoryLabel: 'Wave / Progression', goal: 1100, difficulty: 'heavy' }),
-    buildWeeklyBounty({ id: 'start_1100_waves', title: 'Start 1,100 waves', detail: 'Start 1,100 waves this week.', metric: 'wavesStarted', metricLabel: 'Waves started', category: 'progression', categoryLabel: 'Wave / Progression', goal: 1100, difficulty: 'heavy' }),
+    buildWeeklyBounty({ id: 'complete_150_past_30', title: 'Complete 95 waves past wave 30', detail: 'Finish 95 waves numbered 31 or higher.', metric: 'wavesPast30', metricLabel: 'Waves beyond 30', category: 'progression', categoryLabel: 'Wave / Progression', goal: 95, difficulty: 'heavy' }),
+    buildWeeklyBounty({ id: 'complete_1100_waves', title: 'Complete 125 waves', detail: 'Finish 125 waves this week.', metric: 'wavesCompleted', metricLabel: 'Waves completed', category: 'progression', categoryLabel: 'Wave / Progression', goal: 125, difficulty: 'heavy' }),
+    buildWeeklyBounty({ id: 'start_1100_waves', title: 'Start 125 waves', detail: 'Start 125 waves this week.', metric: 'wavesStarted', metricLabel: 'Waves started', category: 'progression', categoryLabel: 'Wave / Progression', goal: 125, difficulty: 'heavy' }),
     buildWeeklyBounty({ id: 'trigger_300_multiwave_bonus', title: 'Trigger multi-wave bonus 300 times', detail: 'Trigger the multi-wave bonus 300 times this week.', metric: 'multiWaveBonusTriggers', metricLabel: 'Bonus triggers', category: 'progression', categoryLabel: 'Wave / Progression', goal: 300, difficulty: 'heavy', isMultiWave: true, selectionWeight: 1.2 }),
   ]);
 
@@ -2589,9 +2608,6 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
 
   function getQuestProgressValue(quest, board = ensureDailyQuestBoard()) {
     if (!quest) return 0;
-    if (!isQuestUnlocked(quest, board)) {
-      return Math.max(0, Number(board.progress?.[quest.id] || 0) || 0);
-    }
     const progressValue = Number(board.progress?.[quest.id] ?? board.metrics?.[quest.metric] ?? 0) || 0;
     return Math.max(0, progressValue);
   }
@@ -2605,7 +2621,11 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
   }
 
   function areFreeDailyQuestsComplete(board = ensureDailyQuestBoard()) {
-    return getActiveDailyQuests().filter((quest) => quest.tierKey === 'free').every((quest) => isQuestComplete(quest, board));
+    const freeQuests = getActiveDailyQuests().filter((quest) => quest && quest.tierKey === 'free');
+    if (!freeQuests.length) return true;
+    const requiredCount = Math.max(1, Number(DAILY_QUEST_TIER_CONFIG.free?.count || freeQuests.length));
+    const completedCount = freeQuests.filter((quest) => isQuestComplete(quest, board)).length;
+    return completedCount >= Math.min(requiredCount, freeQuests.length);
   }
 
   function getTierQuestIndex(quest, board = ensureDailyQuestBoard()) {
@@ -2701,10 +2721,12 @@ async function waitForRewardClaimPayout(claimPayload, initialResult = null, opti
 async function claimDailyQuest(questId) {
   const board = ensureDailyQuestBoard();
   const quest = getQuestDefinitionById(questId);
-  if (!quest || isQuestClaimed(questId, board) || !isQuestUnlocked(quest, board) || !isQuestComplete(quest, board)) return;
+  const claimedBeforeRequest = isQuestClaimed(questId, board);
+  const checkingRonPayout = claimedBeforeRequest && getQuestRewardCurrency(quest) === 'RON' && Number(quest && quest.rewardJewel || 0) > 0;
+  if (!quest || (claimedBeforeRequest && !checkingRonPayout) || !isQuestUnlocked(quest, board) || !isQuestComplete(quest, board)) return;
   const claimedJewelTotal = getClaimedDailyQuestJewelTotal(board);
   const rewardJewel = Math.max(0, Number(quest.rewardJewel || 0));
-  if (rewardJewel > 0 && claimedJewelTotal + rewardJewel > 7) {
+  if (!claimedBeforeRequest && rewardJewel > 0 && claimedJewelTotal + rewardJewel > 7) {
     const resetText = formatDailyQuestResetCountdown(getSecondsUntilDailyQuestReset());
     const capMessage = `it looks like you already claimed your daily quest rewards, they will reset with new quests in ${resetText} and you can complete and claim more then.`;
     board.error = capMessage;
@@ -2743,27 +2765,41 @@ async function claimDailyQuest(questId) {
       claimPayload.testResetCycle = Number(board.testCycle || 0);
     }
     const result = await requestRewardClaim(claimPayload);
-    board.claimed[questId] = true;
-    persistDailyQuestBoard();
-    try {
-      const rewardCurrency = String(getQuestRewardCurrency(quest) || '').trim().toUpperCase();
-      const rewardValue = Math.max(0, Number(getQuestRewardAmountValue(quest) || 0));
-      if ((rewardCurrency === 'JEWEL' || rewardCurrency === 'HONK') && rewardValue > 0) {
-        addStoredDailyQuestClaimedJewelTotal(rewardCurrency === 'HONK' ? rewardValue * JEWEL_PER_HONK : rewardValue, board.playerKey, board.dateKey);
-      }
-    } catch (_error) {}
-    if (quest.tierKey === 'elite' || quest.tierKey === 'standard') updateWeeklyBountyMetric('dailyEliteQuestsCompleted', 1);
-    if (!isConnectedWalletOnAvax() && getQuestRewardCurrency(quest) === 'JEWEL' && Number(quest.rewardJewel || 0) > 0) awardPremiumJewels(Number(quest.rewardJewel || 0), `Daily quest: ${quest.name}`);
     const payoutResult = await waitForRewardClaimPayout(claimPayload, result);
-    if (payoutResult && (String(payoutResult.status || '').toLowerCase() === 'paid' || String(payoutResult.txHash || '').trim())) {
+    const payoutStatus = String(payoutResult && payoutResult.status || '').trim().toLowerCase();
+    const payoutTxHash = String(payoutResult && payoutResult.txHash || '').trim();
+    const claimIsSettled = payoutStatus === 'paid' || !!payoutTxHash;
+    if (claimIsSettled) {
+      board.claimed[questId] = true;
+      persistDailyQuestBoard();
+      if (!claimedBeforeRequest) {
+        try {
+          const rewardCurrency = String(getQuestRewardCurrency(quest) || '').trim().toUpperCase();
+          const rewardValue = Math.max(0, Number(getQuestRewardAmountValue(quest) || 0));
+          if ((rewardCurrency === 'JEWEL' || rewardCurrency === 'HONK') && rewardValue > 0) {
+            addStoredDailyQuestClaimedJewelTotal(rewardCurrency === 'HONK' ? rewardValue * JEWEL_PER_HONK : rewardValue, board.playerKey, board.dateKey);
+          }
+        } catch (_error) {}
+        if (quest.tierKey === 'elite' || quest.tierKey === 'standard') updateWeeklyBountyMetric('dailyEliteQuestsCompleted', 1);
+        if (!isConnectedWalletOnAvax() && getQuestRewardCurrency(quest) === 'JEWEL' && Number(quest.rewardJewel || 0) > 0) awardPremiumJewels(Number(quest.rewardJewel || 0), `Daily quest: ${quest.name}`);
+      }
+    }
+    if (payoutResult && (payoutStatus === 'paid' || payoutTxHash)) {
       refreshWalletJewelTokenBalance({ skipMilestoneRender: true }).catch(() => null);
       if (typeof refreshTopMenuData === 'function') refreshTopMenuData({ includeRunBalance: false });
+      const payoutRewardText = String(payoutResult.rewardAmountText || payoutResult.amountText || payoutResult.rewardText || resolvedRewardText).trim() || resolvedRewardText;
       showRewardPayoutNotice({
-        txHash: payoutResult.txHash,
-        rewardText: resolvedRewardText,
-        rewardCurrency: claimPayload.rewardCurrency,
+        txHash: payoutTxHash,
+        rewardText: payoutRewardText,
+        rewardCurrency: payoutResult.rewardCurrency || claimPayload.rewardCurrency,
         reasonText: quest.name,
       });
+    } else if (!claimIsSettled) {
+      const retryMessage = payoutResult && payoutResult.message
+        ? payoutResult.message
+        : (result && result.message ? result.message : 'Daily reward payout was not sent yet. Try claiming again after checking the treasury balance.');
+      board.error = retryMessage;
+      showBanner(retryMessage, 5200);
     } else {
       showBanner(result && result.message ? result.message : 'Daily reward claim submitted.', 2600);
     }
@@ -2773,8 +2809,8 @@ async function claimDailyQuest(questId) {
     if (details && String(details.code || '').trim() === 'no_qualifying_run_today') {
       const latestAt = String(details.latestTrackedRunAt || '').trim();
       message = latestAt
-        ? `You need one tracked run after 00:00 UTC before claiming a JEWEL daily. Latest tracked run: ${latestAt}.`
-        : 'You need one tracked run after 00:00 UTC before claiming a JEWEL daily.';
+        ? `You need one tracked run after 00:00 UTC before claiming a daily reward. Latest tracked run: ${latestAt}.`
+        : 'You need one tracked run after 00:00 UTC before claiming a daily reward.';
     }
     board.error = message;
     showBanner(board.error, 4200);
@@ -2928,6 +2964,12 @@ function formatQuestResetCountdown(dateKey) {
     if (!els.questsBody) return;
     const board = ensureDailyQuestBoard();
     const quests = getActiveDailyQuests();
+    const freeQuestCount = quests.filter((quest) => quest && quest.tierKey === 'free').length;
+    const requiredUnlockQuestCount = Math.min(
+      Math.max(1, Number(DAILY_QUEST_TIER_CONFIG.free?.count || freeQuestCount || 1)),
+      Math.max(1, freeQuestCount || 1)
+    );
+    const payoutQuestCount = quests.filter((quest) => Number(quest && quest.rewardJewel || 0) > 0).length;
     const completedCount = quests.filter((quest) => isQuestComplete(quest, board)).length;
     const claimedCount = quests.filter((quest) => isQuestClaimed(quest.id, board)).length;
     const cards = quests.map((quest, index) => {
@@ -2945,7 +2987,7 @@ function formatQuestResetCountdown(dateKey) {
       const readyButtonText = rewardValue <= 0 ? 'Complete Phase 1 Quest' : `Claim ${rewardText}`;
       const button = claimed
         ? '<button type="button" class="bounty-claim-btn" disabled>Claimed</button>'
-        : `<button type="button" class="bounty-claim-btn" data-quest-id="${quest.id}" ${claimDisabled ? 'disabled' : ''}>${board.claiming ? 'Submitting…' : (complete ? readyButtonText : (unlocked ? 'Complete Quest' : 'Finish all unlock quests'))}</button>`;
+        : `<button type="button" class="bounty-claim-btn" data-quest-id="${quest.id}" ${claimDisabled ? 'disabled' : ''}>${board.claiming ? 'Submitting...' : (complete ? readyButtonText : (unlocked ? 'Complete Quest' : `Finish ${requiredUnlockQuestCount} unlock quests`))}</button>`;
       return `
         <article class="bounty-card ${stateClass} quest-card">
           <div class="bounty-card-top">
@@ -2957,14 +2999,14 @@ function formatQuestResetCountdown(dateKey) {
           </div>
           <h3 class="bounty-card-title">${escapeHtml(quest.name)}</h3>
           <p class="bounty-card-copy">${escapeHtml(quest.description)}</p>
-          ${unlocked ? '' : '<div class="bounty-status-banner">Phase 2 quests remain locked until Phase 1 quests are complete.</div>'}
+          ${unlocked ? '' : `<div class="bounty-status-banner">Phase 2 quests remain locked until ${requiredUnlockQuestCount} Phase 1 quests are complete.</div>`}
           <div class="quest-progress-row">
             <div class="quest-progress-track"><span style="width:${Math.max(0, Math.min(100, (progress / quest.goal) * 100))}%"></span></div>
             <div class="quest-progress-text">${unlocked ? `${Math.min(progress, quest.goal)} / ${quest.goal}` : `Locked · ${quest.goal}`}</div>
           </div>
           <div class="bounty-card-footer">
             <span class="bounty-state-chip ${stateClass}">${stateLabel}</span>
-            <span class="bounty-chain-note">${unlocked ? 'Progress carries all day for this player.' : 'Phase 2 quests remain locked until Phase 1 quests are complete.'}</span>
+            <span class="bounty-chain-note">${unlocked ? 'Progress carries all day for this player.' : `Phase 2 quests remain locked until ${requiredUnlockQuestCount} Phase 1 quests are complete.`}</span>
           </div>
           ${button}
         </article>
@@ -3004,7 +3046,7 @@ function formatQuestResetCountdown(dateKey) {
       <div class="bounty-hero-strip bounty-hero-strip-with-toggle">
         <div>
           <div class="bounty-strip-kicker">Today's progress • ${claimedCount}/${quests.length} claimed • ${completedCount}/${quests.length} completed</div>
-          <p class="bounty-strip-copy">Player: ${escapeHtml(board.playerKey)}${escapeHtml(testCycleText)} • Phase 1 has 4 unlock quests. Phase 2 has 5 payout quests. Nine daily quests roll every UTC day. Finish all Phase 1 quests before Phase 2 unlocks. If your wallet is not whitelisted, your quest rewards will require manual approval before payout. To get whitelisted, contact winstonjazzhands in the DFK Discord.</p>
+          <p class="bounty-strip-copy">Player: ${escapeHtml(board.playerKey)}${escapeHtml(testCycleText)} - Phase 1 requires ${requiredUnlockQuestCount} unlock quests. Phase 2 has ${payoutQuestCount} payout quests. ${quests.length} daily quests roll every UTC day. Finish ${requiredUnlockQuestCount} Phase 1 quests before Phase 2 unlocks. If your wallet is not whitelisted, your quest rewards will require manual approval before payout. To get whitelisted, contact winstonjazzhands in the DFK Discord.</p>
         </div>
         <div class="bounty-strip-actions">
           ${rewardToggle}
@@ -3046,13 +3088,14 @@ function formatQuestResetCountdown(dateKey) {
         if (typeof event.stopPropagation === 'function') event.stopPropagation();
       };
       ['pointerdown','mousedown','mouseup','touchstart','touchend','click'].forEach((evtName) => {
-        modal.addEventListener(evtName, (event) => {
-          if (event.target === modal) swallow(event);
-        }, true);
+        modal.addEventListener(evtName, swallow);
         card?.addEventListener(evtName, swallow);
       });
       modal.addEventListener('click', (event) => {
-        if (event.target === modal) closeFn();
+        if (event.target === modal) {
+          swallow(event);
+          closeFn();
+        }
       });
     };
     bindModal(els.questsModal, closeQuestsModal);
@@ -3341,6 +3384,17 @@ function formatQuestResetCountdown(dateKey) {
 
   function hasWalletJewelForWei(amountWei) {
     return getWalletNativeJewelBalance() + 1e-9 >= weiToJewelNumber(amountWei);
+  }
+
+  function hasWalletNativeForWei(amountWei) {
+    return getWalletNativeJewelBalance() + 1e-9 >= weiToJewelNumber(amountWei);
+  }
+
+  function formatWalletNativeBalanceAs(symbol) {
+    const balance = getWalletNativeJewelBalance();
+    const safeSymbol = String(symbol || 'Native');
+    if (!Number.isFinite(balance)) return `0 ${safeSymbol}`;
+    return `${balance.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${safeSymbol}`;
   }
 
   async function refreshWalletJewelTokenBalance(options = {}) {
@@ -3639,6 +3693,16 @@ function formatQuestResetCountdown(dateKey) {
     } catch (_error) { return 'native_jewel'; }
   }
 
+  function getConnectedChainPaymentAsset() {
+    try {
+      if (isConnectedWalletOnAvax()) return 'native_avax';
+      if (isConnectedWalletOnRonin()) return 'native_ron';
+      return 'native_jewel';
+    } catch (_error) {
+      return 'native_jewel';
+    }
+  }
+
   function getDfkPaymentWeiForJewelAmount(jewelAmount, paymentAsset = 'native_jewel') {
     const asset = String(paymentAsset).toLowerCase();
     if (asset === 'honk') return honkToWei(getHonkPurchaseAmountFromJewel(jewelAmount));
@@ -3650,6 +3714,7 @@ function formatQuestResetCountdown(dateKey) {
     const asset = String(paymentAsset).toLowerCase();
     if (asset === 'honk') return `${formatHonkAmount(getHonkPurchaseAmountFromJewel(jewelAmount))} HONK`;
     if (asset === 'native_ron' || asset === 'ron') return `${(Math.max(0, Number(jewelAmount || 0)) * RON_PER_JEWEL_PURCHASE).toLocaleString(undefined, { maximumFractionDigits: 3 })} RON`;
+    if (asset === 'native_avax' || asset === 'avax') return formatAvaxValue(getAvaxWeiForJewelAmount(jewelAmount));
     return `${Math.max(0, Number(jewelAmount || 0)).toLocaleString(undefined, { maximumFractionDigits: 3 })} JEWEL`;
   }
 
@@ -3800,6 +3865,32 @@ function formatQuestResetCountdown(dateKey) {
     });
   }
 
+  function getStartWavePaymentAsset() {
+    return getConnectedChainPaymentAsset();
+  }
+
+  function getStartWavePaymentLabel() {
+    return getDfkPaymentLabelForJewelAmount(START_WAVE_JEWEL_COST, getStartWavePaymentAsset());
+  }
+
+  function getStartWavePaymentChainLabel() {
+    const asset = getStartWavePaymentAsset();
+    if (asset === 'native_avax') return 'Avalanche';
+    if (asset === 'native_ron') return 'Ronin';
+    return 'DFK Chain';
+  }
+
+  async function switchStartWavePaymentChain(chainKey) {
+    const nextChain = String(chainKey || '').trim();
+    if (!nextChain) return;
+    if (!window.DFKDefenseWallet || typeof window.DFKDefenseWallet.switchChain !== 'function') {
+      throw new Error('Wallet chain switching is unavailable.');
+    }
+    await window.DFKDefenseWallet.switchChain(nextChain);
+    await refreshTopMenuData({ includeRunBalance: false }).catch(() => null);
+    renderStartWaveChoicePanel();
+  }
+
   function updateStartModeModalMode() {
     if (!els.startModeModal) return;
     const waveOnly = !!game.startModeWaveOnly;
@@ -3834,6 +3925,22 @@ function formatQuestResetCountdown(dateKey) {
       if (game.startWaveSubmitting) return;
       setSelectedPlayerStartWave(target.getAttribute('data-player-start-wave'));
     });
+    panel.addEventListener('change', async (event) => {
+      const select = event.target instanceof Element ? event.target.closest('[data-start-wave-chain-select]') : null;
+      if (!select) return;
+      swallowModalEvent(event);
+      const chainKey = String(select.value || '').trim();
+      if (!chainKey || select.dataset.switching === '1') return;
+      select.dataset.switching = '1';
+      select.disabled = true;
+      try {
+        await switchStartWavePaymentChain(chainKey);
+        showBanner('Chain switched. Wave skip price updated.', 1700);
+      } catch (error) {
+        showBanner(error && error.message ? error.message : 'Could not switch chains.', 2600);
+        renderStartWaveChoicePanel();
+      }
+    });
     return panel;
   }
 
@@ -3853,10 +3960,26 @@ function formatQuestResetCountdown(dateKey) {
     panel.classList.remove('hidden');
     const selected = getSelectedPlayerStartWave();
     const submitting = !!game.startWaveSubmitting;
-    const startWavePaymentLabel = getDfkPaymentLabelForJewelAmount(START_WAVE_JEWEL_COST, getPreferredDfkTokenPaymentAsset());
+    const startWavePaymentLabel = getStartWavePaymentLabel();
+    const selectedChainKey = getConnectedWalletChainKey();
+    const chainLabel = getStartWavePaymentChainLabel();
     panel.innerHTML = `
-      <div class="start-wave-choice-title">${submitting ? 'Submitting starting wave' : 'Choose starting wave'}</div>
-      <p class="start-wave-choice-copy start-wave-choice-copy-unified">If you're not sure which to choose, pick Wave 1 or Wave 10 for a new player experience. Wave 1 and Wave 10 are always free; <strong>jumping to Wave 20 or higher costs ${startWavePaymentLabel}</strong>. <strong>Paid skips include 3 free New Run clicks before the first wave starts</strong> so you can reroll the preplaced game barriers at no extra cost. <strong>Clear the wave you skip to</strong> so the run can be tracked. Doing so will also unlock a paid extra-hero hire, similar to the bonus normally offered after beating Wave 20. Strong heroes let you skip the slow early waves and get to the fun faster.</p>
+      <div class="start-wave-choice-head">
+        <div>
+          <div class="start-wave-choice-title">${submitting ? 'Submitting starting wave' : 'Choose starting wave'}</div>
+          <div class="start-wave-chain-note">Paid skips use ${escapeHtml(chainLabel)}: ${escapeHtml(startWavePaymentLabel)}</div>
+        </div>
+        <label class="start-wave-chain-switcher">
+          <span>Pay on</span>
+          <select class="wallet-top-chain-select start-wave-chain-select" data-start-wave-chain-select aria-label="Switch chain for wave skip payment" ${submitting ? 'disabled' : ''}>
+            <option value="" ${selectedChainKey ? '' : 'selected'}>Choose chain...</option>
+            <option value="avax" ${selectedChainKey === 'avax' ? 'selected' : ''}>AVAX</option>
+            <option value="dfk" ${selectedChainKey === 'dfk' ? 'selected' : ''}>DFK Chain</option>
+            <option value="ronin" ${selectedChainKey === 'ronin' ? 'selected' : ''}>Ronin</option>
+          </select>
+        </label>
+      </div>
+      <p class="start-wave-choice-copy start-wave-choice-copy-unified">If you're not sure which to choose, pick Wave 1, Wave 10, or Wave 20 for a free start. <strong>jumping to Wave 30 or higher costs ${startWavePaymentLabel}</strong>. <strong>Paid skips include 3 free New Run clicks before the first wave starts</strong> so you can reroll the preplaced game barriers at no extra cost. <strong>Clear the wave you skip to</strong> so the run can be tracked. Doing so will also unlock a paid extra-hero hire, similar to the bonus normally offered after beating Wave 20. Strong heroes let you skip the slow early waves and get to the fun faster.</p>
       <div class="start-wave-choice-grid">
         ${PLAYER_START_WAVE_OPTIONS.map((wave) => {
           const paid = isPaidPlayerStartWave(wave);
@@ -3869,6 +3992,8 @@ function formatQuestResetCountdown(dateKey) {
           </button>`;
         }).join('')}
       </div>`;
+    const chainSelect = panel.querySelector('[data-start-wave-chain-select]');
+    if (chainSelect && typeof protectChainSwitcherClickTarget === 'function') protectChainSwitcherClickTarget(chainSelect);
     if (els.startModeNote && els.startModeNote.parentElement !== panel) panel.appendChild(els.startModeNote);
   }
 
@@ -3880,21 +4005,30 @@ function formatQuestResetCountdown(dateKey) {
       return game.startWavePaymentPendingPromise;
     }
     if (!getConnectedWalletAddress()) {
-      setStartModeNote(`Connect your wallet to start at wave ${wave}. Wave ${wave} costs ${START_WAVE_JEWEL_COST} JEWEL.`);
+      setStartModeNote(`Connect your wallet to start at wave ${wave}. Wave ${wave} costs ${getStartWavePaymentLabel()}.`);
       return false;
     }
-    const paymentAsset = getPreferredDfkTokenPaymentAsset();
-    const priceWei = getDfkPaymentWeiForJewelAmount(START_WAVE_JEWEL_COST, paymentAsset);
+    const paymentAsset = getStartWavePaymentAsset();
+    const priceWei = paymentAsset === 'native_avax'
+      ? getAvaxWeiForJewelAmount(START_WAVE_JEWEL_COST)
+      : getDfkPaymentWeiForJewelAmount(START_WAVE_JEWEL_COST, paymentAsset);
     const priceLabel = getDfkPaymentLabelForJewelAmount(START_WAVE_JEWEL_COST, paymentAsset);
     const paymentPromise = (async () => {
       setStartModeNote(`Confirm ${priceLabel} to start at wave ${wave}.`);
-      await performDfkJewelTrade('wave_jump_start', priceWei, `${priceLabel} wave ${wave} start`, {
+      const metadata = {
         paymentAsset,
-        treasuryAddress: paymentAsset === 'native_ron' ? DFK_RON_TREASURY_ADDRESS : DFK_JEWEL_TREASURY_ADDRESS,
         startWave: wave,
         heroStartLevel: getPlayerStartHeroLevel(wave),
         startingGold: getPlayerStartGold(wave),
-      });
+      };
+      if (paymentAsset === 'native_avax') {
+        await performAvaxTreasuryPurchase('wave_jump_start', priceWei, `${priceLabel} wave ${wave} start`, metadata);
+      } else {
+        await performDfkJewelTrade('wave_jump_start', priceWei, `${priceLabel} wave ${wave} start`, {
+          ...metadata,
+          treasuryAddress: paymentAsset === 'native_ron' ? DFK_RON_TREASURY_ADDRESS : DFK_JEWEL_TREASURY_ADDRESS,
+        });
+      }
       game.startWavePaymentCompletedWave = wave;
       return true;
     })();
@@ -3937,7 +4071,8 @@ function formatQuestResetCountdown(dateKey) {
   }
 
   function isAwaitingManualStartAfterWaveJump() {
-    const startWave = normalizePlayerStartWave(game.startWaveChoice || 1);
+    const adminStartWave = Math.max(1, Math.floor(Number(game.startWaveChoice || 1)));
+    const startWave = game.adminRunSetupUsed ? adminStartWave : normalizePlayerStartWave(game.startWaveChoice || 1);
     return startWave > 1
       && Number(game.waveNumber || 0) === startWave - 1
       && Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) === startWave
@@ -3955,6 +4090,16 @@ function formatQuestResetCountdown(dateKey) {
     const rails = window.DFKCryptoRails;
     if (rails && typeof rails.formatAvaxFromWei === 'function') return rails.formatAvaxFromWei(wei);
     return '.001 AVAX';
+  }
+
+  function getAvaxWeiForJewelAmount(jewelAmount) {
+    const amount = Math.max(0, Number(jewelAmount || 0));
+    if (amount <= 0) return '0';
+    try {
+      return (BigInt(String(AVAX_START_WAVE_JEWEL_EQUIVALENT_WEI || '0')) * BigInt(Math.round(amount * 1000)) / 1000n).toString();
+    } catch (_error) {
+      return String(AVAX_START_WAVE_JEWEL_EQUIVALENT_WEI || '0');
+    }
   }
 
   function getCurrentRunClientId() {
@@ -5045,6 +5190,30 @@ function formatQuestResetCountdown(dateKey) {
     if (submitBtn) submitBtn.disabled = true;
     if (statusEl) statusEl.textContent = 'Preparing run for submission...';
     try {
+      if (window.DFKRunTracker && typeof window.DFKRunTracker.submitCompletedRun === 'function') {
+        if (statusEl) statusEl.textContent = 'Submitting this high-value run... sign if prompted.';
+        const directResult = await window.DFKRunTracker.submitCompletedRun(runPayload, { interactive: true });
+        const directPending = Number(directResult && directResult.pending || 0);
+        const directUploaded = Number(directResult && directResult.uploaded || 0);
+        if (directResult && (directResult.ok || directUploaded > 0 || directPending === 0 && !directResult.queued)) {
+          markRecentTrackedRunSubmission();
+          if (window.DFKCryptoRails && typeof window.DFKCryptoRails.clearActiveRunPayment === 'function') window.DFKCryptoRails.clearActiveRunPayment(game.runTracking.clientRunId);
+          if (game.runTracking) game.runTracking.submitted = true;
+          game.highValueRunPromptSubmitSucceeded = true;
+          if (statusEl) statusEl.textContent = 'run submitted, good job!';
+          showBanner('High-value run submitted.', 3200);
+          return true;
+        }
+        if (statusEl) statusEl.textContent = directResult && directResult.secureSignatureRequired
+          ? 'Run is still waiting for the secure signature. Click Submit Run and approve the wallet prompt.'
+          : (directResult && directResult.error ? directResult.error : 'Run submission is still pending.');
+        if (submitBtn) {
+          submitBtn.textContent = 'Close';
+          submitBtn.dataset.highValueFailedClose = '1';
+        }
+        return false;
+      }
+
       if (runPayload && game.runTracking && !game.runTracking.submitted) {
         let queuedCurrentRun = false;
         if (window.DFKRunTracker && typeof window.DFKRunTracker.submitCompletedRunKeepalive === 'function') {
@@ -6474,6 +6643,19 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     render();
   }
 
+  function createMilestonePaymentButton({ label, balanceLabel, enabled, disabledReason, onClick }) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'small-action milestone-hero-offer-btn';
+    btn.textContent = balanceLabel ? `${label} · ${balanceLabel}` : label;
+    btn.disabled = !enabled;
+    btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    if (!enabled) btn.classList.add('milestone-hero-offer-btn-disabled');
+    btn.title = enabled ? label : (disabledReason || 'Unavailable with current wallet balance.');
+    if (enabled && typeof onClick === 'function') btn.addEventListener('click', onClick);
+    return btn;
+  }
+
   function openMilestonePaymentChoiceModal(heroType) {
     const offer = game.milestoneHeroOffer;
     const template = TOWER_TEMPLATES[heroType];
@@ -6487,60 +6669,64 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const jewelWei = getMilestoneHeroJewelPriceWei(offer);
     const jewelLabel = getMilestoneHeroJewelPriceLabel(offer);
     const avaxLabel = formatAvaxValue(AVAX_MILESTONE_HERO_WEI);
+    const jewelBalanceLabel = isConnectedWalletOnDfk() ? formatWalletNativeBalanceAs('JEWEL') : 'DFK Chain';
     const jewelAvailable = isConnectedWalletOnDfk() && hasWalletJewelForWei(jewelWei);
     const honkLabel = getMilestoneHeroHonkPriceLabel(offer);
+    const honkBalanceLabel = isConnectedWalletOnDfk() ? getWalletHonkBalanceLabel() : 'DFK Chain';
     const honkAvailable = isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(DFK_EXTRA_HERO_JEWEL_COST);
     const ronLabel = getMilestoneHeroRonPriceLabel(offer);
-    const ronAvailable = isConnectedWalletOnRonin();
+    const ronBalanceLabel = isConnectedWalletOnRonin() ? formatWalletNativeBalanceAs('RON') : 'Ronin';
+    const ronAvailable = isConnectedWalletOnRonin() && hasWalletNativeForWei(getMilestoneHeroRonPriceWei(offer));
+    const avaxBalanceLabel = isConnectedWalletOnAvax() ? formatWalletNativeBalanceAs('AVAX') : 'Avalanche';
+    const avaxAvailable = useAvax && hasWalletNativeForWei(AVAX_MILESTONE_HERO_WEI);
     body.innerHTML = `<p>Hire ${template.name} L${offer.heroLevel}. Choose how you want to pay.</p>
       <p>${useAvax ? avaxLabel : `${jewelLabel}, ${honkLabel}, or ${ronLabel}` }.</p>`;
     actions.innerHTML = '';
     if (useAvax) {
-      const avaxBtn = document.createElement('button');
-      avaxBtn.type = 'button';
-      avaxBtn.className = 'small-action milestone-hero-offer-btn';
-      avaxBtn.textContent = `Use ${avaxLabel}`;
-      avaxBtn.addEventListener('click', () => {
+      const avaxBtn = createMilestonePaymentButton({
+        label: `Use ${avaxLabel}`,
+        balanceLabel: avaxBalanceLabel,
+        enabled: avaxAvailable,
+        disabledReason: isConnectedWalletOnAvax() ? `Need ${avaxLabel}. Wallet: ${avaxBalanceLabel}.` : 'Switch to Avalanche to pay with AVAX.',
+        onClick: () => {
         setMilestonePaymentChoiceProcessing(template.name);
         beginMilestoneHeroHireAvax(heroType, { preserveModal: true }).catch((error) => console.error(error));
+        },
       });
       actions.appendChild(avaxBtn);
     }
-    if (jewelAvailable) {
-      const jewelBtn = document.createElement('button');
-      jewelBtn.type = 'button';
-      jewelBtn.className = 'small-action milestone-hero-offer-btn';
-      jewelBtn.textContent = `Use ${jewelLabel}`;
-      jewelBtn.addEventListener('click', () => {
+    if (!useAvax) {
+      const jewelBtn = createMilestonePaymentButton({
+        label: `Use ${jewelLabel}`,
+        balanceLabel: jewelBalanceLabel,
+        enabled: jewelAvailable,
+        disabledReason: isConnectedWalletOnDfk() ? `Need ${jewelLabel}. Wallet: ${jewelBalanceLabel}.` : 'Switch to DFK Chain to pay with JEWEL.',
+        onClick: () => {
         setMilestonePaymentChoiceProcessing(template.name);
         beginMilestoneHeroHireJewel(heroType, { preserveModal: true }).catch((error) => console.error(error));
+        },
       });
       actions.appendChild(jewelBtn);
-    }
-    if (!useAvax && honkAvailable) {
-      const honkBtn = document.createElement('button');
-      honkBtn.type = 'button';
-      honkBtn.className = 'small-action milestone-hero-offer-btn';
-      honkBtn.textContent = `Use ${honkLabel}`;
-      honkBtn.addEventListener('click', () => {
+      const honkBtn = createMilestonePaymentButton({
+        label: `Use ${honkLabel}`,
+        balanceLabel: honkBalanceLabel,
+        enabled: honkAvailable,
+        disabledReason: isConnectedWalletOnDfk() ? `Need ${honkLabel}. Wallet: ${honkBalanceLabel}.` : 'Switch to DFK Chain to pay with HONK.',
+        onClick: () => {
         setMilestonePaymentChoiceProcessing(template.name);
         beginMilestoneHeroHireHonk(heroType, { preserveModal: true }).catch((error) => console.error(error));
+        },
       });
       actions.appendChild(honkBtn);
-    }
-    if (!useAvax) {
-      const ronBtn = document.createElement('button');
-      ronBtn.type = 'button';
-      ronBtn.className = 'small-action milestone-hero-offer-btn';
-      ronBtn.textContent = `Use ${ronLabel}`;
-      ronBtn.title = ronAvailable ? `Pay ${ronLabel} on Ronin.` : 'Switch to Ronin to pay with RON.';
-      ronBtn.addEventListener('click', () => {
-        if (!ronAvailable) {
-          showBanner(`Switch to Ronin to pay ${ronLabel}.`, 2200);
-          return;
-        }
+      const ronBtn = createMilestonePaymentButton({
+        label: `Use ${ronLabel}`,
+        balanceLabel: ronBalanceLabel,
+        enabled: ronAvailable,
+        disabledReason: isConnectedWalletOnRonin() ? `Need ${ronLabel}. Wallet: ${ronBalanceLabel}.` : 'Switch to Ronin to pay with RON.',
+        onClick: () => {
         setMilestonePaymentChoiceProcessing(template.name);
         beginMilestoneHeroHireRon(heroType, { preserveModal: true }).catch((error) => console.error(error));
+        },
       });
       actions.appendChild(ronBtn);
     }
@@ -6561,12 +6747,14 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const offer = game.milestoneHeroOffer;
     if (!offer) return;
     if (canUseAvaxRailsPurchases()) {
-      return beginMilestoneHeroHireAvax(heroType);
+      if (hasWalletNativeForWei(AVAX_MILESTONE_HERO_WEI)) return beginMilestoneHeroHireAvax(heroType);
+      openMilestonePaymentChoiceModal(heroType);
+      return null;
     }
     const goldAvailable = false;
     const jewelAvailable = isConnectedWalletOnDfk() && hasWalletJewelForWei(getMilestoneHeroJewelPriceWei(offer));
     const honkAvailable = isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(DFK_EXTRA_HERO_JEWEL_COST);
-    const ronAvailable = isConnectedWalletOnRonin();
+    const ronAvailable = isConnectedWalletOnRonin() && hasWalletNativeForWei(getMilestoneHeroRonPriceWei(offer));
     if ([goldAvailable, jewelAvailable, honkAvailable, ronAvailable].filter(Boolean).length > 1) {
       openMilestonePaymentChoiceModal(heroType);
       return;
@@ -6579,6 +6767,10 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     }
     if (ronAvailable) {
       return beginMilestoneHeroHireRon(heroType);
+    }
+    if (getConnectedWalletAddress()) {
+      openMilestonePaymentChoiceModal(heroType);
+      return null;
     }
     showBanner(`Need 2 JEWEL, HONK equivalent on DFK Chain, or ${getMilestoneHeroRonPriceLabel(offer)} on Ronin to hire this hero.`, 2400);
     return null;
@@ -6652,6 +6844,65 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     render();
   }
 
+  function getConnectedWalletChainKey() {
+    const chainId = Number(getConnectedWalletChainId && getConnectedWalletChainId() || 0);
+    if (chainId === Number(window.DFK_AVAX_CHAIN_ID || 43114)) return 'avax';
+    if (chainId === Number(window.DFK_RONIN_CHAIN_ID || 2020)) return 'ronin';
+    if (chainId === 53935) return 'dfk';
+    return '';
+  }
+
+  function protectChainSwitcherClickTarget(target) {
+    if (!target || target.dataset.chainSwitcherProtected) return;
+    target.dataset.chainSwitcherProtected = '1';
+    const stopMenuClose = (event) => {
+      if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    };
+    ['pointerdown', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend'].forEach((eventName) => {
+      target.addEventListener(eventName, stopMenuClose, { capture: true });
+    });
+  }
+
+  function createMilestoneChainSwitcher() {
+    const wrap = document.createElement('label');
+    wrap.className = 'milestone-hero-chain-switcher';
+    const label = document.createElement('span');
+    label.textContent = 'Switch chains';
+    const select = document.createElement('select');
+    select.className = 'wallet-top-chain-select milestone-hero-chain-select';
+    select.setAttribute('aria-label', 'Switch chains for reinforcement payment');
+    select.innerHTML = `
+      <option value="">Choose chain...</option>
+      <option value="avax">AVAX</option>
+      <option value="dfk">DFK Chain</option>
+      <option value="ronin">Ronin</option>
+    `;
+    select.value = getConnectedWalletChainKey();
+    select.disabled = !!game.milestoneOfferTxnPending;
+    protectChainSwitcherClickTarget(wrap);
+    protectChainSwitcherClickTarget(select);
+    select.addEventListener('change', async () => {
+      const chainKey = String(select.value || '').trim();
+      if (!chainKey) return;
+      select.disabled = true;
+      try {
+        if (!window.DFKDefenseWallet || typeof window.DFKDefenseWallet.switchChain !== 'function') {
+          throw new Error('Wallet chain switching is unavailable.');
+        }
+        await window.DFKDefenseWallet.switchChain(chainKey);
+        await refreshWalletJewelTokenBalance({ skipMilestoneRender: true }).catch(() => null);
+        if (typeof refreshTopMenuData === 'function') await refreshTopMenuData({ includeRunBalance: false }).catch(() => null);
+        showBanner('Chain switched. Wallet balance refreshed.', 1800);
+      } catch (error) {
+        showBanner(error && error.message ? error.message : 'Could not switch chains.', 2600);
+      } finally {
+        renderMilestoneHeroOffer();
+      }
+    });
+    wrap.append(label, select);
+    return wrap;
+  }
+
   function renderMilestoneHeroOffer() {
     const modal = els.milestoneHeroOfferModal;
     const body = els.milestoneHeroOfferBody;
@@ -6678,7 +6929,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const honkLabel = heroOffer ? getMilestoneHeroHonkPriceLabel(heroOffer) : '';
     const honkAvailable = !!(heroOffer && isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(DFK_EXTRA_HERO_JEWEL_COST));
     const ronLabel = heroOffer ? getMilestoneHeroRonPriceLabel(heroOffer) : '';
-    const ronAvailable = !!(heroOffer && isConnectedWalletOnRonin());
+    const ronAvailable = !!(heroOffer && isConnectedWalletOnRonin() && hasWalletNativeForWei(getMilestoneHeroRonPriceWei(heroOffer)));
     const shouldAutoRefreshMilestoneWallet = !!(heroOffer && hasWallet && !useAvax && isConnectedWalletOnDfk());
     const now = Date.now();
     if (shouldAutoRefreshMilestoneWallet && !game.milestoneOfferAutoRefreshPending && (now - Number(game.milestoneOfferLastAutoRefreshAt || 0) >= 15000)) {
@@ -6723,17 +6974,22 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       const nativeBalanceLabel = getWalletNativeJewelBalanceLabel();
       const balanceSummary = useAvax
         ? `Wallet: ${nativeBalanceLabel}`
-        : (isConnectedWalletOnRonin() ? 'Wallet: Ronin RON balance' : `Wallet: ${nativeBalanceLabel} · HONK: ${getWalletHonkBalanceLabel()}`);
-      if (!hasWallet) note.textContent = useAvax ? 'Connect a wallet on Avalanche to pay with AVAX for this hire.' : 'Connect a wallet on DFK Chain for JEWEL/HONK or Ronin for RON.';
-      else if (milestoneTxnPending) note.textContent = `${game.milestoneOfferTxnLabel || 'Purchase'} submitting…`;
-      else if (game.dfkGoldSwapPending || game.jewelTradePending) note.textContent = 'Waiting for wallet confirmation…';
-      else if (useAvax) note.textContent = `Pick a hero to pay ${avaxHeroLabel} with AVAX for the hire. ${balanceSummary}`;
-      else if ([goldAvailable, jewelAvailable, honkAvailable, ronAvailable].filter(Boolean).length > 1) note.textContent = `Multiple payment methods are available. Pick a hero and the lightwindow will ask: JEWEL, HONK, or RON. ${balanceSummary}`;
-      else if (jewelAvailable) note.textContent = `Only JEWEL is ready right now, so picking a hero launches the JEWEL transaction. ${balanceSummary}`;
-      else if (honkAvailable) note.textContent = `Only HONK is ready right now, so picking a hero launches the HONK transaction. ${balanceSummary}`;
-      else if (ronAvailable) note.textContent = `Only RON is ready right now, so picking a hero launches the RON transaction. ${balanceSummary}`;
-      else note.textContent = `Need ${jewelLabel}, ${honkLabel}, or ${ronLabel} in the connected wallet. ${balanceSummary}`;
+        : (isConnectedWalletOnRonin() ? `Wallet: ${formatWalletNativeBalanceAs('RON')}` : `Wallet: ${nativeBalanceLabel} · HONK: ${getWalletHonkBalanceLabel()}`);
+      let noteText = '';
+      if (!hasWallet) noteText = useAvax ? 'Connect a wallet on Avalanche to pay with AVAX for this hire.' : 'Connect a wallet on DFK Chain for JEWEL/HONK or Ronin for RON.';
+      else if (milestoneTxnPending) noteText = `${game.milestoneOfferTxnLabel || 'Purchase'} submitting…`;
+      else if (game.dfkGoldSwapPending || game.jewelTradePending) noteText = 'Waiting for wallet confirmation…';
+      else if (useAvax) noteText = `Pick a hero to pay ${avaxHeroLabel} with AVAX for the hire.`;
+      else if ([goldAvailable, jewelAvailable, honkAvailable, ronAvailable].filter(Boolean).length > 1) noteText = 'Multiple payment methods are available. Pick a hero and the lightwindow will ask: JEWEL, HONK, or RON.';
+      else if (jewelAvailable) noteText = 'Only JEWEL is ready right now, so picking a hero launches the JEWEL transaction.';
+      else if (honkAvailable) noteText = 'Only HONK is ready right now, so picking a hero launches the HONK transaction.';
+      else if (ronAvailable) noteText = 'Only RON is ready right now, so picking a hero launches the RON transaction.';
+      else noteText = `Need ${jewelLabel}, ${honkLabel}, or ${ronLabel} in the connected wallet.`;
+      note.innerHTML = `${escapeHtml(noteText)}${hasWallet ? `<strong class="milestone-hero-wallet-balance">${escapeHtml(balanceSummary)}</strong>` : ''}`;
       actions.appendChild(note);
+      if (hasWallet && !useAvax) {
+        actions.appendChild(createMilestoneChainSwitcher());
+      }
 
       if (hasWallet) {
         const refreshBtn = document.createElement('button');
@@ -7734,6 +7990,336 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     }, 3000);
   }
 
+  function ensureWaveGoldJackpotMount() {
+    let notice = document.getElementById('waveGoldJackpot');
+    if (notice) return notice;
+    notice = document.createElement('div');
+    notice.id = 'waveGoldJackpot';
+    notice.className = 'wave-gold-jackpot hidden';
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+    notice.innerHTML = `
+      <div class="wave-gold-jackpot-inner">
+        <span class="wave-gold-jackpot-kicker"></span>
+        <span class="wave-gold-jackpot-title"></span>
+        <span class="wave-gold-jackpot-subtitle"></span>
+      </div>
+    `;
+    document.body.appendChild(notice);
+    return notice;
+  }
+
+  function showWaveGoldJackpot(amount, waveNumber) {
+    const notice = ensureWaveGoldJackpotMount();
+    if (!notice) return;
+    if (game.waveGoldJackpotTimer) {
+      clearTimeout(game.waveGoldJackpotTimer);
+      game.waveGoldJackpotTimer = null;
+    }
+    const kicker = notice.querySelector('.wave-gold-jackpot-kicker');
+    const title = notice.querySelector('.wave-gold-jackpot-title');
+    const subtitle = notice.querySelector('.wave-gold-jackpot-subtitle');
+    if (kicker) kicker.textContent = `Wave ${Math.max(1, Number(waveNumber || 0))} gold cache`;
+    if (title) title.textContent = '50x Gold Drop';
+    if (subtitle) subtitle.textContent = `+${formatJewel(amount)} gold`;
+    notice.classList.remove('hidden');
+    notice.style.animation = 'none';
+    void notice.offsetWidth;
+    notice.style.animation = '';
+    game.waveGoldJackpotTimer = setTimeout(() => {
+      notice.classList.add('hidden');
+      game.waveGoldJackpotTimer = null;
+    }, 2550);
+  }
+
+  const D20_WAVE_BONUSES = Object.freeze({
+    1: { name: 'Second Wind', detail: 'Fully heals the Warrior and Statue, then gives the Warrior a Statue charge.' },
+    2: { name: 'Gold Rush', detail: 'Gain gold equal to 2x the current wave.' },
+    3: { name: 'Sharpened Blades', detail: 'All heroes gain +10% damage for 5 waves.' },
+    4: { name: 'Fortified Portal', detail: 'Restore 10% portal HP.' },
+    5: { name: 'Quick Hands', detail: 'Reset all hero ability cooldowns.' },
+    6: { name: 'Lucky Find', detail: 'Open a relic choice.' },
+    7: { name: 'Veteran Training', detail: 'All heroes gain 5 levels.' },
+    8: { name: 'Battle Focus', detail: 'All heroes gain +10% attack speed for 5 waves.' },
+    9: { name: 'Treasure Cache', detail: 'Gain gold equal to 5x the current wave.' },
+    10: { name: 'Half-Price Hire', detail: 'The next normal hero hire costs half price.' },
+    11: { name: 'Guardian Ward', detail: 'Next wave enemies deal 20% less damage.' },
+    12: { name: 'Scout Report', detail: 'Next wave has 15% fewer enemies.' },
+    13: { name: 'Power Surge', detail: 'Selected hero gains +20% damage for 3 waves.' },
+    14: { name: 'Axie Cheer', detail: 'Heroes with Axie companions gain +15% damage and HP for 5 waves.' },
+    15: { name: 'Relic Spark', detail: 'A random owned relic sparks, granting all heroes +3% damage for the run.' },
+    16: { name: 'Elite Training', detail: 'All heroes gain 10 levels.' },
+    17: { name: 'Jackpot', detail: 'Gain 10x wave gold and reset all cooldowns.' },
+    18: { name: 'Blessing of the God Tree', detail: 'Choose a full heal, big gold, or a relic choice.' },
+    19: { name: "Warrior's Rally", detail: 'Warrior gains +25% damage and HP for 5 waves.' },
+    20: { name: 'Divine Favor', detail: 'Gain 20x wave gold and open a relic choice.' },
+  });
+
+  function getD20WaveBonus(roll) {
+    return D20_WAVE_BONUSES[Math.max(1, Math.min(20, Math.floor(Number(roll || 1))))] || D20_WAVE_BONUSES[1];
+  }
+
+  function ensureD20WaveRollOverlay() {
+    let overlay = document.getElementById('d20WaveRollOverlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'd20WaveRollOverlay';
+    overlay.className = 'd20-wave-roll-overlay hidden';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML = `
+      <div class="d20-wave-roll-panel">
+        <div class="d20-wave-roll-kicker">Every 10 waves</div>
+        <div class="d20-wave-roll-title">Fate Roll</div>
+        <div class="d20-die" aria-hidden="true"><span>D20</span></div>
+        <div class="d20-wave-roll-result">
+          <span class="d20-wave-roll-number"></span>
+          <strong class="d20-wave-roll-name"></strong>
+          <p class="d20-wave-roll-detail"></p>
+        </div>
+        <div class="d20-wave-roll-actions"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  function showD20WaveRollOverlay(waveNumber, roll, bonus) {
+    return new Promise((resolve) => {
+      const overlay = ensureD20WaveRollOverlay();
+      if (!overlay) {
+        resolve('');
+        return;
+      }
+      const die = overlay.querySelector('.d20-die span');
+      const number = overlay.querySelector('.d20-wave-roll-number');
+      const name = overlay.querySelector('.d20-wave-roll-name');
+      const detail = overlay.querySelector('.d20-wave-roll-detail');
+      const actions = overlay.querySelector('.d20-wave-roll-actions');
+      overlay.classList.remove('hidden', 'is-resolved');
+      if (number) number.textContent = `Wave ${Math.max(1, Number(waveNumber || 0))}`;
+      if (name) name.textContent = 'Rolling...';
+      if (detail) detail.textContent = 'The D20 is bouncing across the battlefield.';
+      if (actions) actions.innerHTML = '';
+      let ticks = 0;
+      const rollTimer = setInterval(() => {
+        ticks += 1;
+        if (die) die.textContent = String(1 + Math.floor(Math.random() * 20));
+      }, 75);
+      setTimeout(() => {
+        clearInterval(rollTimer);
+        overlay.classList.add('is-resolved');
+        if (die) die.textContent = String(roll);
+        if (number) number.textContent = `Rolled ${roll}`;
+        if (name) name.textContent = bonus.name;
+        if (detail) detail.textContent = bonus.detail;
+        if (!actions) {
+          resolve('');
+          return;
+        }
+        const closeWith = (choice = '') => {
+          overlay.classList.add('hidden');
+          resolve(choice);
+        };
+        if (roll === 18) {
+          actions.innerHTML = `
+            <button type="button" data-d20-choice="heal">Full Heal</button>
+            <button type="button" data-d20-choice="gold">Big Gold</button>
+            <button type="button" data-d20-choice="relic">Relic Choice</button>
+          `;
+          actions.querySelectorAll('button').forEach((button) => {
+            button.addEventListener('click', () => closeWith(button.getAttribute('data-d20-choice') || ''));
+          });
+        } else {
+          actions.innerHTML = '<button type="button" data-d20-choice="continue">Continue</button>';
+          actions.querySelector('button')?.addEventListener('click', () => closeWith(''));
+        }
+      }, Math.max(1200, 1800 + (ticks * 0)));
+    });
+  }
+
+  function addD20Gold(amount, label, waveNumber) {
+    const safeAmount = Math.max(0, Math.round(Number(amount || 0)));
+    if (!safeAmount) return;
+    game.jewel = Number(game.jewel || 0) + safeAmount;
+    updateQuestMetric('goldEarned', safeAmount);
+    pulseGoldPill();
+    updateTopbar();
+    showWaveGoldJackpot(safeAmount, waveNumber);
+    log(`${label}: +${formatJewel(safeAmount)} Gold.`);
+  }
+
+  function resetAllHeroCooldowns() {
+    for (const tower of game.towers || []) {
+      if (!tower || tower.hp <= 0 || tower.isSatellite) continue;
+      if (!tower.abilityReadyAt || typeof tower.abilityReadyAt !== 'object') tower.abilityReadyAt = {};
+      for (const ability of tower.abilities || []) {
+        if (ability && ability.key) tower.abilityReadyAt[ability.key] = 0;
+      }
+      tower.abilityGlobalReadyAt = 0;
+    }
+  }
+
+  function getD20BuffTargets(filter = null) {
+    return (game.towers || []).filter((tower) => tower
+      && tower.hp > 0
+      && !tower.isSatellite
+      && !tower.isChampion
+      && !isStatueTower(tower)
+      && (!filter || filter(tower)));
+  }
+
+  function applyD20TemporaryBuff(key, label, waves, opts = {}, filter = null) {
+    const expiresAfterWave = Math.max(0, Number(game.waveNumber || 0)) + Math.max(1, Number(waves || 1));
+    const targets = getD20BuffTargets(filter);
+    for (const tower of targets) {
+      if (opts.damageMult) {
+        tower.damage *= Number(opts.damageMult || 1);
+        tower.baseDamage = Math.max(0, Number(tower.baseDamage || tower.damage || 0)) * Number(opts.damageMult || 1);
+      }
+      if (opts.speedMult && Number(tower.basicCooldown || 0) > 0) tower.basicCooldown /= Number(opts.speedMult || 1);
+      if (opts.hpMult) {
+        const hpRatio = Math.max(0, Math.min(1, Number(tower.hp || 0) / Math.max(1, Number(tower.maxHp || 1))));
+        tower.maxHp = Math.max(1, Number(tower.maxHp || 1) * Number(opts.hpMult || 1));
+        tower.hp = Math.max(1, Math.min(tower.maxHp, tower.maxHp * hpRatio));
+      }
+    }
+    if (targets.length) {
+      if (!Array.isArray(game.d20TemporaryBuffs)) game.d20TemporaryBuffs = [];
+      game.d20TemporaryBuffs.push({ key, label, expiresAfterWave, opts: { ...opts }, towerIds: targets.map((tower) => tower.id) });
+      showBanner(`${label}: ${targets.length} hero${targets.length === 1 ? '' : 'es'} empowered.`, 2400);
+    }
+  }
+
+  function expireD20TemporaryBuffs(clearedWave) {
+    if (!Array.isArray(game.d20TemporaryBuffs) || !game.d20TemporaryBuffs.length) return;
+    const remaining = [];
+    for (const buff of game.d20TemporaryBuffs) {
+      if (Number(clearedWave || 0) < Number(buff.expiresAfterWave || 0)) {
+        remaining.push(buff);
+        continue;
+      }
+      const opts = buff.opts || {};
+      const ids = new Set(Array.isArray(buff.towerIds) ? buff.towerIds : []);
+      for (const tower of game.towers || []) {
+        if (!tower || !ids.has(tower.id)) continue;
+        if (opts.damageMult) {
+          tower.damage /= Number(opts.damageMult || 1);
+          tower.baseDamage = Math.max(0, Number(tower.baseDamage || tower.damage || 0)) / Number(opts.damageMult || 1);
+        }
+        if (opts.speedMult && Number(tower.basicCooldown || 0) > 0) tower.basicCooldown *= Number(opts.speedMult || 1);
+        if (opts.hpMult) {
+          const hpRatio = Math.max(0, Math.min(1, Number(tower.hp || 0) / Math.max(1, Number(tower.maxHp || 1))));
+          tower.maxHp = Math.max(1, Number(tower.maxHp || 1) / Number(opts.hpMult || 1));
+          tower.hp = Math.max(1, Math.min(tower.maxHp, tower.maxHp * hpRatio));
+        }
+      }
+      log(`${buff.label || 'D20 buff'} expired after wave ${clearedWave}.`);
+    }
+    game.d20TemporaryBuffs = remaining;
+  }
+
+  function levelAllHeroesBy(levels) {
+    const amount = Math.max(1, Math.floor(Number(levels || 1)));
+    const targets = getD20BuffTargets();
+    for (const tower of targets) {
+      const start = Math.max(1, Number(tower.level || 1));
+      const target = Math.min(999, start + amount);
+      for (let nextLevel = start + 1; nextLevel <= target; nextLevel += 1) applyTowerLevelStep(tower, nextLevel);
+      tower.hp = tower.maxHp;
+    }
+    if (targets.length) showBanner(`All heroes gained ${amount} levels.`, 2600);
+  }
+
+  function healWarriorAndStatueWithCharge() {
+    const warriors = (game.towers || []).filter((tower) => tower && tower.type === 'warrior' && !tower.isSatellite && tower.hp > 0);
+    const statues = (game.towers || []).filter((tower) => isStatueTower(tower) && tower.hp > 0);
+    for (const tower of [...warriors, ...statues]) tower.hp = tower.maxHp;
+    for (const warrior of warriors) warrior.satelliteCharges = Math.max(1, Number(warrior.satelliteCharges || 0));
+    showBanner(`Second Wind: Warrior${statues.length ? ' and Statue' : ''} healed. Statue charge ready.`, 2800);
+  }
+
+  function healAllHeroesAndPortal() {
+    for (const tower of game.towers || []) {
+      if (tower && tower.hp > 0) tower.hp = tower.maxHp;
+    }
+    game.portalHp = Math.min(2500, Math.max(0, Number(game.portalHp || 0)) + 2500);
+    showBanner('Blessing: everyone is fully healed.', 2600);
+  }
+
+  function openD20RelicChoice() {
+    const opened = offerRelics('d20');
+    if (opened) setInstruction('D20 bonus: choose one relic, or skip.');
+    return opened;
+  }
+
+  function applyD20WaveBonus(roll, waveNumber, choice = '') {
+    const wave = Math.max(1, Number(waveNumber || game.waveNumber || 1));
+    const selectedTower = getTowerById(game.selectedId);
+    switch (roll) {
+      case 1: healWarriorAndStatueWithCharge(); break;
+      case 2: addD20Gold(wave * 2, 'D20 Gold Rush', wave); break;
+      case 3: applyD20TemporaryBuff('sharpened_blades', 'Sharpened Blades', 5, { damageMult: 1.10 }); break;
+      case 4: game.portalHp = Math.min(2500, Math.max(0, Number(game.portalHp || 0)) + 250); showBanner('Fortified Portal: +10% portal HP.', 2400); break;
+      case 5: resetAllHeroCooldowns(); showBanner('Quick Hands: all cooldowns reset.', 2400); break;
+      case 6: openD20RelicChoice(); break;
+      case 7: levelAllHeroesBy(5); break;
+      case 8: applyD20TemporaryBuff('battle_focus', 'Battle Focus', 5, { speedMult: 1.10 }); break;
+      case 9: addD20Gold(wave * 5, 'D20 Treasure Cache', wave); break;
+      case 10: game.nextHeroHireHalfPrice = true; showBanner('Half-Price Hire: your next normal hero hire is 50% off.', 3000); renderHirePanel(); break;
+      case 11: game.d20GuardianWardUntilWave = Math.max(Number(game.d20GuardianWardUntilWave || 0), wave + 1); showBanner('Guardian Ward: next wave enemies deal 20% less damage.', 3000); break;
+      case 12: game.forcedNextWaveVarianceId = 'fewer'; game.currentWaveRngRoll = { id: 'fewer', label: '15% fewer enemies', message: 'Scout Report is ready for the next wave.' }; showBanner('Scout Report: next wave has 15% fewer enemies.', 3000); updateTopbar(); break;
+      case 13: applyD20TemporaryBuff('power_surge', 'Power Surge', 3, { damageMult: 1.20 }, (tower) => tower.id === selectedTower?.id); break;
+      case 14: applyD20TemporaryBuff('axie_cheer', 'Axie Cheer', 5, { damageMult: 1.15, hpMult: 1.15 }, (tower) => !!tower.axiePetApplied); break;
+      case 15: {
+        const relic = pickRandom((game.ownedRelics || []).map(id => RELICS.find(item => item.id === id)).filter(Boolean));
+        buffTowerType(game, 'warrior', { damageMult: 1.03 });
+        ['archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker'].forEach(type => buffTowerType(game, type, { damageMult: 1.03 }));
+        showBanner(`Relic Spark${relic ? `: ${relic.name}` : ''}: all heroes +3% damage.`, 3000);
+        break;
+      }
+      case 16: levelAllHeroesBy(10); break;
+      case 17: addD20Gold(wave * 10, 'D20 Jackpot', wave); resetAllHeroCooldowns(); showBanner('Jackpot: gold gained and cooldowns reset.', 3000); break;
+      case 18:
+        if (choice === 'gold') addD20Gold(wave * 12, 'God Tree Gold Blessing', wave);
+        else if (choice === 'relic') openD20RelicChoice();
+        else healAllHeroesAndPortal();
+        break;
+      case 19: applyD20TemporaryBuff('warriors_rally', "Warrior's Rally", 5, { damageMult: 1.25, hpMult: 1.25 }, (tower) => tower.type === 'warrior'); break;
+      case 20: addD20Gold(wave * 20, 'Divine Favor', wave); openD20RelicChoice(); break;
+      default: break;
+    }
+    recordReplayEvent('d20_wave_bonus', { waveNumber: wave, roll, bonus: getD20WaveBonus(roll).name, choice: choice || null });
+    render();
+  }
+
+  function maybeStartD20WaveBonus(finalWaveNumber, clearedPlans, resume) {
+    const qualifyingWave = [...(Array.isArray(clearedPlans) ? clearedPlans : [])]
+      .map(plan => Number(plan && plan.waveNumber || 0))
+      .filter(wave => wave > 0 && wave % 10 === 0)
+      .sort((a, b) => b - a)[0] || 0;
+    if (!qualifyingWave || game.d20RollsApplied?.[qualifyingWave]) return false;
+    if (!game.d20RollsApplied || typeof game.d20RollsApplied !== 'object') game.d20RollsApplied = {};
+    game.d20RollsApplied[qualifyingWave] = true;
+    game.d20RollPending = true;
+    game.autoStartEnabled = false;
+    game.autoStartReadyAt = 0;
+    setBoardInputLocked(true);
+    const roll = 1 + Math.floor(Math.random() * 20);
+    const bonus = getD20WaveBonus(roll);
+    setInstruction(`Wave ${qualifyingWave} cleared. D20 fate roll in progress.`);
+    showD20WaveRollOverlay(qualifyingWave, roll, bonus).then((choice) => {
+      try {
+        applyD20WaveBonus(roll, qualifyingWave, choice);
+      } finally {
+        game.d20RollPending = false;
+        setBoardInputLocked(false);
+        if (typeof resume === 'function') resume();
+      }
+    });
+    return true;
+  }
+
   function getWaveRngIconMeta(variance = game.currentWaveRngRoll) {
     const id = String(variance && variance.id || 'pending');
     if (id === 'more') return { className: 'more', shortLabel: '10% more enemies', label: 'Wave RNG: 10% more enemies' };
@@ -8582,6 +9168,10 @@ function renderDamageReport() {
     game.adminPanelUsed = true;
     game.adminRunSetupUsed = true;
     game.adminHeroLevelOverrides = getAdminHeroLevelOverridesFromUi();
+    game.startWaveChoice = startWave;
+    game.startWaveHeroLevel = Math.max(1, Math.floor(Number(game.adminHeroLevelOverrides?.warrior || getPlayerStartHeroLevel(startWave)) || 1));
+    game.startWaveJumpPaid = false;
+    game.startWaveFreeRerollsLeft = 0;
     for (const tower of game.towers || []) applyAdminLevelOverrideToTower(tower);
     if ((game.towers || []).some((tower) => tower && tower.type === 'warrior' && !tower.isSatellite && tower.hp > 0) && game.phase === SETUP_PHASES.WARRIOR) {
       game.phase = SETUP_PHASES.BATTLE;
@@ -8647,6 +9237,7 @@ function renderDamageReport() {
   }
 
   const MOOSIFER_BOSS_WAVE = 50;
+  const SKY_TERROR_WAVE = 70;
   const MOOSIFER_BOUNTY_FUNCTION = window.DFK_SUPABASE_MOOSIFER_BOUNTY_FUNCTION || 'moosifer-bounty';
   const MOOSIFER_MAX_DIFFICULTY = 35;
   const MOOSIFER_BOSS_DIFFICULTY = 10;
@@ -9000,6 +9591,64 @@ function renderDamageReport() {
     return true;
   }
 
+  function openSkyTerrorIntroModal() {
+    const modal = document.createElement('div');
+    modal.id = 'skyTerrorIntroModal';
+    modal.className = 'intro-modal';
+    modal.setAttribute('aria-hidden', 'false');
+    modal.innerHTML = `
+      <div class="intro-modal-card panel moosifer-boss-modal" role="dialog" aria-modal="true" aria-labelledby="skyTerrorIntroTitle">
+        <div class="intro-modal-header">
+          <div>
+            <div class="intro-kicker">Wave ${SKY_TERROR_WAVE}</div>
+            <h2 id="skyTerrorIntroTitle">Something is circling above the board</h2>
+          </div>
+        </div>
+        <div class="intro-body moosifer-boss-body">
+          <img class="moosifer-boss-img" src="${escapeHtml(FLYING_DEMON_MOVE_GIF_PATH)}" alt="Flying Demon">
+          <p>A flying demon has broken away from the summoner's ritual and is waiting for the defenders at wave ${SKY_TERROR_WAVE}. It ignores the usual ground pressure until the wave has been cleared, then dives onto the board as a siege threat.</p>
+          <p>Hold the line through the wave, keep enough damage ready for the landing, and do not let it tear into the portal.</p>
+          <div class="moosifer-boss-stats">
+            <span>Wave ${SKY_TERROR_WAVE}</span>
+            <span>Flying siege boss</span>
+            <span>Moves over blockers</span>
+            <span>Attacks the portal</span>
+          </div>
+        </div>
+        <div class="intro-modal-footer">
+          <button id="skyTerrorIntroStartBtn" type="button">Face the Flying Demon</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    document.body.classList.add('intro-open');
+    game.introOpen = true;
+    setBoardInputLocked(true);
+    syncStatusOverlayVisibility(true);
+    modal.querySelector('#skyTerrorIntroStartBtn')?.addEventListener('click', () => {
+      modal.remove();
+      document.body.classList.remove('intro-open');
+      game.introOpen = false;
+      setBoardInputLocked(false);
+      syncStatusOverlayVisibility(false);
+      game.skyTerrorFightReady = true;
+      game.nextWavePlan = sanitizeWavePlan(buildWavePlan(SKY_TERROR_WAVE));
+      setInstruction('The Flying Demon is waiting. Press FACE FLYING DEMON when you are prepared.');
+      syncStartWaveButtonState();
+      render();
+    });
+  }
+
+  function maybeOpenSkyTerrorIntroForWave(plan) {
+    if (!plan || Number(plan.waveNumber || 0) !== SKY_TERROR_WAVE || game.skyTerrorIntroShownForRun) return false;
+    game.autoStartEnabled = false;
+    game.autoStartReadyAt = 0;
+    game.skyTerrorIntroShownForRun = true;
+    game.skyTerrorFightReady = false;
+    updateAutoStartButton();
+    openSkyTerrorIntroModal();
+    return true;
+  }
+
   function runTrackerCallSafely(fn, fallback = null) {
     try {
       return fn();
@@ -9111,7 +9760,14 @@ function renderDamageReport() {
       log('Tracked run submission deferred until last chance is resolved.');
       return;
     }
-    await maybeShowHighValueRunSessionPrompt(payload);
+    const highValueRunRequiresSecureSubmit = isHighValueRunPayload(payload);
+    const highValueSubmittedFromPrompt = await maybeShowHighValueRunSessionPrompt(payload);
+    if (highValueSubmittedFromPrompt) {
+      updateQuestMetric('runsCompleted', 1);
+      log(`High-value run submitted at wave ${game.waveNumber}.`);
+      return;
+    }
+    if (highValueRunRequiresSecureSubmit) return;
     game.runTracking.submitted = true;
     updateQuestMetric('runsCompleted', 1);
     try {
@@ -9382,6 +10038,8 @@ function renderDamageReport() {
     game.startWaveJumpPaid = isPaidPlayerStartWave(selectedStartWave);
     game.startWaveFreeRerollsLeft = game.startWaveJumpPaid ? 3 : 0;
     game.startWaveExtraHeroGranted = false;
+    game.skyTerrorIntroShownForRun = false;
+    game.skyTerrorFightReady = false;
     game.moosiferIntroShownForRun = false;
     game.moosiferBossActive = false;
     game.moosiferFreeRetriesUsed = 0;
@@ -10013,6 +10671,7 @@ function renderDamageReport() {
   const CLAIM_BOUNTY_FUNCTION = window.DFK_SUPABASE_CLAIM_BOUNTY_FUNCTION || 'claim-bounty';
   const BOUNTY_RESET_PROGRESS_FUNCTION = window.DFK_SUPABASE_BOUNTY_RESET_PROGRESS_FUNCTION || 'bounty-reset-progress';
   const REQUEST_REWARD_CLAIM_FUNCTION = window.DFK_SUPABASE_REQUEST_REWARD_CLAIM_FUNCTION || 'request-reward-claim';
+  const AXIE_METADATA_FUNCTION = window.DFK_SUPABASE_AXIE_METADATA_FUNCTION || 'axie-metadata';
 
   function getBountySupabaseConfig() {
     const url = window.DFK_SUPABASE_URL || (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || '';
@@ -10027,7 +10686,7 @@ function renderDamageReport() {
   }
 
   function isSessionAuthFailureMessage(message) {
-    return /session not found|session expired|session revoked|wallet mismatch|enable run tracking|missing authorization header|unauthorized|invalid or expired session|session origin mismatch|user agent mismatch/i.test(String(message || ''));
+    return /session not found|session_not_found|session expired|session_expired|session revoked|session_revoked|wallet mismatch|wallet_mismatch|enable run tracking|missing authorization header|unauthorized|valid session token required|missing_session_token|session refresh required|session_refresh_required|invalid or expired session|session origin mismatch|session_origin_mismatch|user agent mismatch|session device mismatch|session_device_mismatch/i.test(String(message || ''));
   }
 
   async function refreshRunTrackerSessionToken(forceRefresh = false) {
@@ -10797,7 +11456,7 @@ function canSubmitRewardClaims() {
     if (cfg.enemyMult) parts.push(`${Math.round((cfg.enemyMult - 1) * 100)}% more enemies`);
     if (cfg.extraBosses) parts.push(`${cfg.extraBosses} extra boss${cfg.extraBosses === 1 ? '' : 'es'}`);
     if (cfg.skitters) parts.push(`${cfg.skitters} elite skitters` + (cfg.skitterBursts && cfg.skitterBursts > 1 ? ` in ${cfg.skitterBursts} bursts` : ''));
-    if (cfg.finalSkyTerror) parts.push('a flying siege terror appears after the wave is cleared');
+    if (cfg.finalSkyTerror) parts.push('the Flying Demon appears after the wave is cleared');
     return parts.join(' • ');
   }
 
@@ -11439,6 +12098,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   const DEFENDER_GOLD_SWAP_REWARD = 1500;
   const AVAX_DEFENDER_GOLD_SWAP_WEI = String(window.DFK_AVAX_GOLD_CRATE_PRICE_WEI || '1000000000000000');
   const AVAX_DEFENDER_GOLD_SWAP_REWARD = 2000;
+  const AVAX_START_WAVE_JEWEL_EQUIVALENT_WEI = String(window.DFK_AVAX_START_WAVE_JEWEL_EQUIVALENT_WEI || AVAX_DEFENDER_GOLD_SWAP_WEI || '1000000000000000');
   const AVAX_MILESTONE_HERO_WEI = String(window.DFK_AVAX_MILESTONE_HERO_PRICE_WEI || '900000000000000');
   const AVAX_MILESTONE_BARRIER_WEI = String(window.DFK_AVAX_MILESTONE_BARRIER_PRICE_WEI || AVAX_MILESTONE_HERO_WEI || '1000000000000000');
   const AVAX_TREASURY_ADDRESS = String(window.DFK_AVAX_TREASURY_ADDRESS || '0xab45288409900be5ef23c19726a30c28268495ad').trim().toLowerCase();
@@ -11553,7 +12213,9 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
 
   function getTowerAxiePetDisplay(tower) {
     if (!tower || tower.isSatellite || tower.isChampion || isStatueTower(tower)) return null;
+    const selectedId = game.selectedAxiePets ? game.selectedAxiePets[tower.type] : null;
     if (tower.axiePetApplied && tower.axiePetImageUrl) {
+      if (selectedId && String(selectedId) !== String(tower.axiePetId || '')) return null;
       return {
         id: tower.axiePetId || '',
         imageUrl: tower.axiePetImageUrl,
@@ -11569,24 +12231,92 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     };
   }
 
+  function clearAxiePetFromTower(tower) {
+    if (!tower || !tower.axiePetApplied) return false;
+    const previousMaxHp = Number(tower.maxHp || 0);
+    const previousHp = Number(tower.hp || 0);
+    const damageMult = Number(tower.axiePetDamageMult || 1) || 1;
+    const hpMult = Number(tower.axiePetHpMult || 1) || 1;
+    const speedMult = Number(tower.axiePetSpeedMult || 1) || 1;
+    tower.axiePetApplied = false;
+    tower.axiePetId = '';
+    tower.axiePetClass = '';
+    tower.axiePetLabel = '';
+    tower.axiePetImageUrl = '';
+    tower.axiePetDamageMult = 1;
+    tower.axiePetHpMult = 1;
+    tower.axiePetSpeedMult = 1;
+    if (tower.type === 'archer') {
+      normalizeArcherStats(tower);
+    } else {
+      if (damageMult !== 1) {
+        tower.damage = Math.max(0, Number(tower.damage || 0)) / damageMult;
+        tower.baseDamage = Math.max(0, Number(tower.baseDamage || tower.damage || 0)) / damageMult;
+      }
+      if (hpMult !== 1) {
+        tower.maxHp = Math.max(1, Number(tower.maxHp || 1) / hpMult);
+        if (Number.isFinite(previousHp) && previousHp > 0 && Number.isFinite(previousMaxHp) && previousMaxHp > 0) {
+          const hpRatio = Math.max(0, Math.min(1, previousHp / previousMaxHp));
+          tower.hp = Math.max(1, Math.min(tower.maxHp, tower.maxHp * hpRatio));
+        } else {
+          tower.hp = Math.min(tower.maxHp, Number(tower.hp || tower.maxHp || 1));
+        }
+      }
+      if (speedMult !== 1 && Number(tower.basicCooldown || 0) > 0) {
+        tower.basicCooldown = Math.max(80, Number(tower.basicCooldown || 0) * speedMult);
+      }
+    }
+    tower.reportLabel = String(tower.reportLabel || tower.name || 'Hero').replace(/\s*(?:•|â€¢)\s*Axie\s*#[^\s]+/g, '');
+    return true;
+  }
+
+  function syncPlacedAxiePetsForTypes(types) {
+    const affectedTypes = new Set((Array.isArray(types) ? types : []).filter(Boolean));
+    if (!affectedTypes.size) return;
+    let changed = false;
+    for (const tower of game.towers || []) {
+      if (!tower || tower.isSatellite || tower.isChampion || isStatueTower(tower) || !affectedTypes.has(tower.type)) continue;
+      const selectedAxie = getSelectedAxiePet(tower.type);
+      const selectedId = selectedAxie ? String(selectedAxie.id || selectedAxie.tokenId || '') : '';
+      if (tower.axiePetApplied && (!selectedId || String(tower.axiePetId || '') !== selectedId)) {
+        changed = clearAxiePetFromTower(tower) || changed;
+      }
+      if (selectedAxie && !tower.axiePetApplied) {
+        changed = applyAxiePetToTower(tower, selectedAxie) || changed;
+      }
+    }
+    if (changed) {
+      try { renderGrid(); } catch (_error) {}
+      updateSelectedInfo();
+    }
+  }
+
   function selectAxiePet(type, axieId) {
     if (!type || !axieId) return;
     if (!game.selectedAxiePets || typeof game.selectedAxiePets !== 'object') game.selectedAxiePets = {};
+    const affectedTypes = new Set([type]);
     for (const [assignedType, assignedId] of Object.entries(game.selectedAxiePets)) {
-      if (assignedType !== type && String(assignedId) === String(axieId)) delete game.selectedAxiePets[assignedType];
+      if (assignedType !== type && String(assignedId) === String(axieId)) {
+        delete game.selectedAxiePets[assignedType];
+        affectedTypes.add(assignedType);
+      }
     }
     game.selectedAxiePets[type] = String(axieId);
+    syncPlacedAxiePetsForTypes(Array.from(affectedTypes));
     renderWalletHeroBonusPanel();
     renderHirePanel();
   }
 
   function applyAxiePetToTower(tower, axieLike) {
-    if (!tower || !axieLike || tower.axiePetApplied || tower.isSatellite || tower.isChampion) return false;
+    if (!tower || !axieLike || tower.isSatellite || tower.isChampion) return false;
+    const nextPetId = String(axieLike.id || axieLike.tokenId || '');
+    if (tower.axiePetApplied && String(tower.axiePetId || '') === nextPetId) return true;
+    if (tower.axiePetApplied) clearAxiePetFromTower(tower);
     const bonus = getAxiePetBonus(axieLike);
     const previousMaxHp = Number(tower.maxHp || 0);
     const previousHp = Number(tower.hp || 0);
     tower.axiePetApplied = true;
-    tower.axiePetId = String(axieLike.id || axieLike.tokenId || '');
+    tower.axiePetId = nextPetId;
     tower.axiePetClass = getAxieClassKey(axieLike);
     tower.axiePetLabel = bonus.label;
     tower.axiePetImageUrl = getAxieImage(axieLike);
@@ -12552,7 +13282,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       const allLoadedCount = Array.isArray(game.allWalletHeroRoster) ? game.allWalletHeroRoster.filter(hero => hero && hero.type).length : rosterCount;
       const axieCount = Array.isArray(game.walletAxieRoster) ? game.walletAxieRoster.length : 0;
       const selectedCount = Object.keys(game.selectedWalletHeroes || {}).length;
-      els.walletHeroBonusSummary.textContent = `${selectedCount} selected â€¢ ${allLoadedCount || rosterCount} heroes${axieCount ? ` â€¢ ${axieCount} Axie pets` : ''} loaded`;
+      els.walletHeroBonusSummary.textContent = `${selectedCount} selected - ${allLoadedCount || rosterCount} heroes${axieCount ? ` - ${axieCount} Axie pets` : ''} loaded`;
     }
   }
 
@@ -13604,7 +14334,6 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         range: template.range,
       };
     }
-    const multiplier = Math.pow(1.15, safeLevel - 1);
     const warriorHpGrowthSteps = Math.max(0, safeLevel - 1);
     const warriorNormalHpGrowthSteps = Math.min(warriorHpGrowthSteps, 38);
     const warriorPost40HpGrowthSteps = Math.max(0, warriorHpGrowthSteps - warriorNormalHpGrowthSteps);
@@ -13612,9 +14341,19 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const hpMultiplier = type === 'warrior'
       ? warriorHpMultiplier
       : Math.pow(NON_WARRIOR_HP_GROWTH_PER_LEVEL, safeLevel - 1);
+    let damageMultiplier = Math.pow(1.05, safeLevel - 1);
+    if (type === 'pirate' || type === 'wizard' || type === 'seer') {
+      damageMultiplier = Math.pow(PIRATE_WIZARD_DAMAGE_GROWTH_PER_LEVEL, safeLevel - 1);
+    } else if (type === 'monk' || type === 'berserker') {
+      damageMultiplier = Math.pow(MONK_BERSERKER_DAMAGE_GROWTH_PER_LEVEL, safeLevel - 1);
+    } else if (type === 'warrior') {
+      const normalDamageSteps = Number(game.waveNumber || 0) > 30 ? 0 : warriorHpGrowthSteps;
+      const postWaveDamageSteps = Number(game.waveNumber || 0) > 30 ? warriorHpGrowthSteps : 0;
+      damageMultiplier = Math.pow(WARRIOR_DAMAGE_GROWTH_PER_LEVEL, normalDamageSteps) * Math.pow(WARRIOR_POST_WAVE30_DAMAGE_GROWTH_PER_LEVEL, postWaveDamageSteps);
+    }
     return {
       hp: template.hp * (type === 'warrior' ? 1 : NON_WARRIOR_BASE_HP_MULTIPLIER) * hpMultiplier,
-      damage: template.damage * multiplier,
+      damage: template.damage * damageMultiplier,
       range: template.range,
     };
   }
@@ -14639,16 +15378,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   async function fetchAxieMetadata(uri) {
     const raw = String(uri || '').trim();
     if (!raw || !/^https?:\/\//i.test(raw)) return null;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
     try {
-      const response = await fetch(raw, { signal: controller.signal, cache: 'force-cache' });
-      if (!response.ok) return null;
-      return await response.json().catch(() => null);
+      const result = await callSupabaseFunctionJson(AXIE_METADATA_FUNCTION, { uri: raw });
+      return result && result.metadata && typeof result.metadata === 'object' ? result.metadata : null;
     } catch (_error) {
       return null;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -15210,7 +15944,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         <img src="${escapeHtml(getAxieImage(axie))}" alt="Axie ${escapeHtml(String(axie.id))}" loading="lazy" />
         <span class="wallet-hero-card-meta">
           <span class="wallet-hero-card-title">Axie #${escapeHtml(String(axie.id))}</span>
-          <span class="wallet-hero-card-sub">${escapeHtml(String(axie.class || 'Unknown'))} • ${escapeHtml(bonus.label)}</span>
+          <span class="wallet-hero-card-sub">${escapeHtml(bonus.label)}</span>
           <span class="wallet-hero-card-bonus">${escapeHtml(bonus.detail)}</span>
         </span>
         <span class="wallet-hero-card-badge">${selected ? 'Pet Selected' : (assignedType ? `Move from ${escapeHtml(TOWER_TEMPLATES[assignedType]?.name || assignedType)}` : 'Use Pet')}</span>
@@ -15418,8 +16152,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       const selectedChampion = getSelectedChampionRecord();
       headerBtn.innerHTML = `
         <span class="wallet-hero-slot-heading">Champion NFTs</span>
-        <span class="wallet-hero-slot-summary">${game.championRoster.length} found${selectedChampion ? ` â€¢ ${escapeHtml(selectedChampion.definition.label)} selected` : ''}</span>
-        <span class="wallet-hero-slot-chevron" aria-hidden="true">${expanded ? 'â–¾' : 'â–¸'}</span>
+        <span class="wallet-hero-slot-summary">${game.championRoster.length} found${selectedChampion ? ` - ${escapeHtml(selectedChampion.definition.label)} selected` : ''}</span>
+        <span class="wallet-hero-slot-chevron" aria-hidden="true">${expanded ? 'v' : '>'}</span>
       `;
       headerBtn.addEventListener('click', () => toggleWalletHeroType(championKey));
       wrap.appendChild(headerBtn);
@@ -16763,7 +17497,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       if (game.placingHeroType) {
         const type = game.placingHeroType;
         const template = TOWER_TEMPLATES[type] || {};
-        const previewLevel = Math.max(1, Number((game.adminHeroLevelOverrides && game.adminHeroLevelOverrides[type]) || 1));
+        const pendingMilestoneLevel = game.pendingMilestoneHeroPlacement && game.pendingMilestoneHeroPlacement.heroType === type
+          ? Number(game.pendingMilestoneHeroPlacement.heroLevel || 0)
+          : 0;
+        const previewLevel = Math.max(1, Number(pendingMilestoneLevel || (game.adminHeroLevelOverrides && game.adminHeroLevelOverrides[type]) || game.startWaveHeroLevel || 1));
         const previewStats = getBaseTowerStatsForLevel(type, previewLevel);
         const name = template.name || getSetupGuideHeroName(type);
         const previewTower = {
@@ -17030,7 +17767,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
 
   function getNextHireCost(includePendingPlacement = false) {
     const index = Math.min(getLivingHireCount(includePendingPlacement), HIRE_COSTS.length - 1);
-    return HIRE_COSTS[index];
+    const baseCost = HIRE_COSTS[index];
+    return game.nextHeroHireHalfPrice ? Math.max(0, Math.ceil(Number(baseCost || 0) * 0.5)) : baseCost;
   }
 
   function shouldHideWarriorHireDuringStartingPlacement() {
@@ -18808,9 +19546,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     }
     if (pendingMilestonePlacement) {
       const targetLevel = Math.max(1, Number(pendingMilestonePlacement.heroLevel || 1));
-      for (let nextLevel = 2; nextLevel <= targetLevel; nextLevel += 1) {
-        applyTowerLevelStep(tower, nextLevel);
-      }
+      levelTowerTo(tower, targetLevel);
       tower.reportLabel = `${tower.name} #${tower.id.replace(/^t/, '')} • Reinforcement L${targetLevel}`;
     }
     if (!isSatellitePlacement && !tower.isChampion) applyInheritedGen0ClassBonus(tower);
@@ -18901,6 +19637,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       updateQuestMetric('goldSpent', cost);
       updateQuestMetric('heroesPlaced', 1);
       updateWeeklyBountyMetric('heroesDeployed', 1);
+      if (!usesBonusHire && !pendingMilestonePlacement && cost > 0 && game.nextHeroHireHalfPrice) {
+        game.nextHeroHireHalfPrice = false;
+        showBanner('Half-price hire used.', 1600);
+      }
       if (usesBonusHire) game.bonusHeroHireCharges = Math.max(0, game.bonusHeroHireCharges - 1);
       game.placingWalletHeroId = null;
       const placementVerb = pendingMilestonePlacement
@@ -19805,6 +20545,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     48: { hpMult: 1.2, skitters: 60, skitterBursts: 3 },
     50: { hpMult: 1.1, extraBosses: 5, skitters: 60, skitterBursts: 3 },
     63: { hpMult: 1.2, skitters: 60, skitterBursts: 3 },
+    70: { hpMult: 1.15, skitters: 70, skitterBursts: 3, finalSkyTerror: true },
     74: { extraBosses: 2, skitters: 60, skitterBursts: 3 },
     85: { hpMult: 1.2, extraBosses: 2 },
     90: { hpMult: 1.2, extraBosses: 1 },
@@ -19817,7 +20558,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     97: { skitters: 60, skitterBursts: 1, extraBosses: 8 },
     98: { skitters: 60, skitterBursts: 1, extraBosses: 8 },
     99: { skitters: 60, skitterBursts: 1, extraBosses: 8 },
-    100: { extraBosses: 8, skitters: 80, skitterBursts: 4, finalSkyTerror: true },
+    100: { extraBosses: 8, skitters: 80, skitterBursts: 4 },
   };
 
   function getEliteWaveConfig(waveNumber) {
@@ -19839,6 +20580,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
 
   function getEnemyWaveSpeedMultiplier(waveNumber) {
     return isEliteWave(waveNumber) ? 0.85 : 0.90;
+  }
+
+  function getD20EnemyDamageMultiplier(waveNumber) {
+    return Number(waveNumber || 0) > 0 && Number(waveNumber || 0) <= Number(game.d20GuardianWardUntilWave || 0) ? 0.80 : 1;
   }
 
   function getStandardWaveEnemyCount(waveNumber, sizeMultiplier = 1) {
@@ -19879,7 +20624,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const enemy = {
       id: `e${game.nextEnemyId++}`,
       type: 'sky_terror',
-      name: 'Sky Terror',
+      name: 'Flying Demon',
       x: spawn.x,
       y: spawn.y,
       hp: maxHp,
@@ -19913,6 +20658,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       visualSizePx: Math.max(56, computeEnemyVisualSizeFromSpawnHp(maxHp, waveNumber) * 1.35),
       enraged: false,
       lastEnrageHealAt: now(),
+      moveSpritePath: FLYING_DEMON_MOVE_GIF_PATH,
+      attackSpritePath: FLYING_DEMON_ATTACK_GIF_PATH,
     };
     return enemy;
   }
@@ -20033,6 +20780,18 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   }
 
   function rollSingleWaveEnemyVariance() {
+    const forcedId = String(game.forcedNextWaveVarianceId || '').trim();
+    if (forcedId) {
+      game.forcedNextWaveVarianceId = '';
+      if (forcedId === 'fewer') {
+        return {
+          id: 'fewer',
+          multiplier: 0.85,
+          label: '15% fewer enemies',
+          message: 'Scout Report paid off. Face 15% fewer enemies this wave!',
+        };
+      }
+    }
     const roll = Math.random();
     if (roll < 0.10) {
       return {
@@ -20128,6 +20887,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     updateQuestMetric('goldEarned', amount);
     pulseGoldPill();
     updateTopbar();
+    showWaveGoldJackpot(amount, waveNumber);
     log(`Wave RNG bonus: +${formatJewel(amount)} Gold at wave ${waveNumber}.`);
     return {
       ...variance,
@@ -20467,6 +21227,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       championActiveUntilWave: Number(game.championActiveUntilWave || 0),
       championEarlyDeployUsed: !!game.championEarlyDeployUsed,
       championEarlyDeployPending: !!game.championEarlyDeployPending,
+      skyTerrorIntroShownForRun: !!game.skyTerrorIntroShownForRun,
+      skyTerrorFightReady: !!game.skyTerrorFightReady,
       moosiferIntroShownForRun: !!game.moosiferIntroShownForRun,
       moosiferFightReady: !!game.moosiferFightReady,
       moosiferDefeatedThisRun: !!game.moosiferDefeatedThisRun,
@@ -20649,6 +21411,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       game.championEarlyDeployUsed = !!snap.championEarlyDeployUsed;
       game.championEarlyDeployPending = !!snap.championEarlyDeployPending;
       const restored = restoreContinueSnapshot(0, { savedResume: true });
+      game.skyTerrorIntroShownForRun = !!snap.skyTerrorIntroShownForRun;
+      game.skyTerrorFightReady = !!snap.skyTerrorFightReady;
       game.moosiferIntroShownForRun = !!snap.moosiferIntroShownForRun;
       game.moosiferFightReady = !!snap.moosiferFightReady;
       game.moosiferDefeatedThisRun = !!snap.moosiferDefeatedThisRun;
@@ -21780,6 +22544,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       maybeOpenMoosiferIntroForWave(game.nextWavePlan).catch(() => openMoosiferIntroModal());
       return;
     }
+    if (Number(game.nextWavePlan.waveNumber || 0) === SKY_TERROR_WAVE && !game.skyTerrorFightReady) {
+      maybeOpenSkyTerrorIntroForWave(game.nextWavePlan);
+      return;
+    }
     if (getLiveWaveCount() >= MAX_LIVE_WAVES) return;
     game.autoStartReadyAt = 0;
     const currentPlan = sanitizeWavePlan(cloneContinueData(game.nextWavePlan));
@@ -22064,7 +22832,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       y: spawn.y,
       hp: finalEnemyHp * difficulty.healthMult * GLOBAL_ENEMY_HP_MULTIPLIER,
       maxHp: finalEnemyHp * difficulty.healthMult * GLOBAL_ENEMY_HP_MULTIPLIER,
-      damage: enemyDamage * difficulty.damageMult * GLOBAL_NON_BOSS_ENEMY_DAMAGE_MULTIPLIER * GLOBAL_ENEMY_DAMAGE_MULTIPLIER,
+      damage: enemyDamage * difficulty.damageMult * GLOBAL_NON_BOSS_ENEMY_DAMAGE_MULTIPLIER * GLOBAL_ENEMY_DAMAGE_MULTIPLIER * getD20EnemyDamageMultiplier(waveNumber),
       moveInterval: (((template.moveInterval / getEnemyWaveSpeedMultiplier(waveNumber)) * getPostWave100EnemyMoveIntervalMultiplier(waveNumber)) / difficulty.speedMult) / GLOBAL_NON_BOSS_ENEMY_SPEED_MULTIPLIER,
       attackInterval: template.attackInterval,
       jewel: ((template.jewel * ENEMY_JEWEL_MULTIPLIER * getWaveGoldMultiplier(waveNumber)) + (waveNumber > 15 ? 0.5 : 0)) * difficulty.goldDropMult,
@@ -22108,7 +22876,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       y: spawn.y,
       hp: bossHp,
       maxHp: bossHp,
-      damage: boss.damage * getEnemyBaselineDamageMultiplier(boss.id, true) * getEarlyWaveStatMultiplier(waveNumber) * difficulty.damageMult * getPostWave25BossDamageMultiplier(waveNumber) * GLOBAL_ENEMY_DAMAGE_MULTIPLIER,
+      damage: boss.damage * getEnemyBaselineDamageMultiplier(boss.id, true) * getEarlyWaveStatMultiplier(waveNumber) * difficulty.damageMult * getPostWave25BossDamageMultiplier(waveNumber) * GLOBAL_ENEMY_DAMAGE_MULTIPLIER * getD20EnemyDamageMultiplier(waveNumber),
       moveInterval: bossMoveInterval,
       attackInterval: boss.attackInterval,
       jewel: ((boss.jewel * ENEMY_JEWEL_MULTIPLIER * getWaveGoldMultiplier(waveNumber)) + (waveNumber > 15 ? 0.5 : 0)) * difficulty.goldDropMult,
@@ -22477,7 +23245,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     dissipateExpiredSatelliteArchers();
     const tenWaveSwapReady = clearedPlans.some(plan => plan.waveNumber > 0 && plan.waveNumber % 10 === 0 && shouldOfferDfkgoldSwap());
     const moosiferGateReady = finalWaveNumber === MOOSIFER_BOSS_WAVE - 1 && !game.moosiferDefeatedThisRun;
-    const relicWaveCleared = !moosiferGateReady && clearedPlans.some(plan => plan.waveNumber % 7 === 0);
+    const skyTerrorGateReady = finalWaveNumber === SKY_TERROR_WAVE - 1 && !game.skyTerrorIntroShownForRun;
+    const relicWaveCleared = !moosiferGateReady && !skyTerrorGateReady && clearedPlans.some(plan => plan.waveNumber % 7 === 0);
     let shopOpened = !!(milestoneHeroOfferConfig || milestoneBarrierOfferConfig);
     if (relicWaveCleared) {
       shopOpened = offerRelics(tenWaveSwapReady ? 'wave10' : 'relic');
@@ -22511,6 +23280,16 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       game.moosiferFightReady = false;
       setInstruction('Wave 49 cleared. Moosifer is coming through the portal.');
       maybeOpenMoosiferIntroForWave(game.nextWavePlan).catch(() => openMoosiferIntroModal());
+    } else if (skyTerrorGateReady) {
+      closeDfkgoldSwapOffer();
+      game.relicChoices = [];
+      game.nextWavePlan = sanitizeWavePlan(buildWavePlan(SKY_TERROR_WAVE));
+      game.autoStartEnabled = false;
+      game.autoStartReadyAt = 0;
+      game.skyTerrorIntroShownForRun = false;
+      game.skyTerrorFightReady = false;
+      setInstruction(`Wave ${SKY_TERROR_WAVE - 1} cleared. A flying demon is circling above the battlefield.`);
+      maybeOpenSkyTerrorIntroForWave(game.nextWavePlan);
     }
     syncStartWaveButtonState();
     maybeRemindChampionDeployment({ waited: getChampionWavesWaited() });
@@ -25316,7 +26095,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       dot.style.top = `${py + offset.y}px`;
       const packbocSizeMult = (enemy.type === 'runner' ? 1.105 : (enemy.type === 'skitter' ? 1.44 : 1.3)) * 0.85;
       const bruteSizeMult = 1.38;
-      const bossSizeMult = enemy.isMoosifer ? 1.18 : 2.45;
+      const bossSizeMult = enemy.isMoosifer ? 1.18 : 1.225;
       const visualWidthBase = enemy.isBoss ? Math.round(enemySize * 2.17 * bossSizeMult) : (usePackbocSprite ? Math.round(enemySize * 1.425 * packbocSizeMult) : (useBruteSprite ? Math.round(enemySize * 1.42 * bruteSizeMult) : enemySize));
       const visualHeightBase = enemy.isBoss ? Math.round(enemySize * 2.17 * bossSizeMult) : (usePackbocSprite ? Math.round(enemySize * 1.275 * packbocSizeMult) : (useBruteSprite ? Math.round(enemySize * 1.42 * bruteSizeMult) : enemySize));
       const visualScale = enemy.isMoosifer ? (enemy.moosiferReachedVoid ? 1.127 : 0.98) : (enemy.isBoss ? 0.64 : 1.1);
@@ -25356,7 +26135,9 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       dot.style.width = `${visualWidth}px`;
       dot.style.height = `${visualHeight}px`;
       if (enemy.isBoss) {
-        dot.src = enemy.isMoosifer ? (enemy.attacking ? 'assets/moosifer-attack.gif' : 'assets/moosifer-walking.gif') : 'assets/dark-summoner.gif';
+        const bossMoveSprite = enemy.moveSpritePath || (enemy.isMoosifer ? 'assets/moosifer-walking.gif' : 'assets/dark-summoner.gif');
+        const bossAttackSprite = enemy.attackSpritePath || (enemy.isMoosifer ? 'assets/moosifer-attack.gif' : bossMoveSprite);
+        dot.src = enemy.attacking ? bossAttackSprite : bossMoveSprite;
         dot.alt = '';
         dot.setAttribute('aria-hidden', 'true');
         dot.style.objectFit = 'contain';
@@ -25397,7 +26178,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         dot.style.background = 'transparent';
         dot.style.boxShadow = 'none';
         dot.style.zIndex = '7';
-        if (enemy.type !== 'skitter') dot.style.filter = getEnemySpriteColorFilter(enemy, 'summoner-assistant');
+        dot.style.filter = getEnemySpriteColorFilter(enemy, enemy.type === 'skitter' ? 'blub' : 'summoner-assistant');
       } else if (useBruteSprite) {
         dot.src = 'assets/paladin.gif';
         dot.alt = '';
@@ -25509,6 +26290,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     ];
     const base = filters[Math.max(0, Math.min(filters.length - 1, scale - 1))] || filters[0];
     if (spriteKind === 'paladin') return `${base} drop-shadow(0 0 7px rgba(255,255,255,0.24))`;
+    if (spriteKind === 'blub') return `${base} drop-shadow(0 0 5px rgba(255,80,48,0.38)) drop-shadow(0 1px 2px rgba(0,0,0,0.42))`;
     return `${base} drop-shadow(0 1px 2px rgba(0,0,0,0.4))`;
   }
 
@@ -26453,6 +27235,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const nextWave = Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0);
     if (!game.moosiferDefeatedThisRun && nextWave >= MOOSIFER_BOSS_WAVE - 1 && getLiveWaveCount() > 0) return false;
     if (nextWave === MOOSIFER_BOSS_WAVE && !game.moosiferFightReady && game.moosiferIntroShownForRun) return false;
+    if (nextWave === SKY_TERROR_WAVE && !game.skyTerrorFightReady && game.skyTerrorIntroShownForRun) return false;
     return game.phase === SETUP_PHASES.BATTLE
       && !game.relicChoices.length
       && !!game.nextWavePlan
@@ -26504,12 +27287,14 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     if (game.startingRelicPending) pushUnique('Choose your free relic');
     else if (Array.isArray(game.relicChoices) && game.relicChoices.length) pushUnique('Choose a relic');
     if (game.continueOfferPending) pushUnique('Resolve your reward choice');
+    if (game.d20RollPending) pushUnique('Resolve the D20 fate roll');
     if (hasActiveMilestoneOffer()) pushUnique('Resolve the milestone offer');
     if (requiresAdvancedStartHeroMinimum() && game.walletHeroLoadPending && !hasUsableWalletHeroRoster()) pushUnique('Wait for NFT search to finish');
     if (requireChampionSelectionBeforeStart()) pushUnique('Choose your champion');
     if (requiresAdvancedStartHeroMinimum() && getPlacedCoreHeroCount() < 5) pushUnique(`Place at least 5 heroes before starting this skipped wave (${getPlacedCoreHeroCount()}/5)`);
     if (!game.moosiferDefeatedThisRun && Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) >= MOOSIFER_BOSS_WAVE - 1 && getLiveWaveCount() > 0) pushUnique('Finish the live wave before the Moosifer gate');
     if (Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) === MOOSIFER_BOSS_WAVE && game.moosiferIntroShownForRun && !game.moosiferFightReady) pushUnique('Use the Moosifer intro to ready the fight');
+    if (Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) === SKY_TERROR_WAVE && game.skyTerrorIntroShownForRun && !game.skyTerrorFightReady) pushUnique('Use the Flying Demon warning to ready the fight');
     if (getLiveWaveCount() >= MAX_LIVE_WAVES) pushUnique('Wait for a live wave slot to open');
     if (game.phase === SETUP_PHASES.BATTLE && !game.nextWavePlan && !game.crashed) pushUnique('Wait for the next wave to prepare');
     return blockers;
@@ -26522,7 +27307,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     els.startWaveBtn.disabled = !canStart;
     const liveCount = getLiveWaveCount();
     const moosiferReady = Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) === MOOSIFER_BOSS_WAVE && !!game.moosiferFightReady;
-    els.startWaveBtn.textContent = moosiferReady ? 'FIGHT MOOSIFER' : (liveCount >= MAX_LIVE_WAVES ? '3 Waves Live' : (liveCount > 0 ? `Start Next Wave (${liveCount}/3 Live)` : 'Start Next Wave'));
+    const skyTerrorReady = Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) === SKY_TERROR_WAVE && !!game.skyTerrorFightReady;
+    els.startWaveBtn.textContent = moosiferReady ? 'FIGHT MOOSIFER' : (skyTerrorReady ? 'FACE FLYING DEMON' : (liveCount >= MAX_LIVE_WAVES ? '3 Waves Live' : (liveCount > 0 ? `Start Next Wave (${liveCount}/3 Live)` : 'Start Next Wave')));
     els.startWaveBtn.classList.toggle('moosifer-fight-ready', moosiferReady);
     const hintEl = ensureStartWaveHintEl();
     const visibleBlockers = canStart ? [] : blockers;
@@ -26552,6 +27338,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       game.autoStartEnabled = false;
       game.autoStartReadyAt = 0;
     }
+    if (Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) === SKY_TERROR_WAVE) {
+      game.autoStartEnabled = false;
+      game.autoStartReadyAt = 0;
+    }
     const enabled = !!game.autoStartEnabled;
     const armed = enabled && !game.runningWave && game.autoStartReadyAt > 0 && buyableWaveStart() && !game.startingRelicPending;
     let label = `Auto Start: ${enabled ? 'On' : 'Off'}`;
@@ -26562,10 +27352,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     els.autoStartBtn.textContent = label;
     els.autoStartBtn.classList.toggle('active', enabled);
     els.autoStartBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-    els.autoStartBtn.disabled = !!game.startingRelicPending || isAwaitingManualStartAfterWaveJump() || Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) >= MOOSIFER_BOSS_WAVE - 1;
+    const skyTerrorGatePending = Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) === SKY_TERROR_WAVE;
+    els.autoStartBtn.disabled = !!game.startingRelicPending || isAwaitingManualStartAfterWaveJump() || Number(game.nextWavePlan && game.nextWavePlan.waveNumber || 0) >= MOOSIFER_BOSS_WAVE - 1 || skyTerrorGatePending;
     els.autoStartBtn.title = enabled
       ? 'Automatically starts the next ready wave after the delay.'
-      : (isAwaitingManualStartAfterWaveJump() ? 'Click Start Next Wave manually to begin this advanced start.' : (els.autoStartBtn.disabled ? 'Auto Start is disabled for the Moosifer gate.' : 'Enable automatic wave starts during preparation phases.'));
+      : (isAwaitingManualStartAfterWaveJump() ? 'Click Start Next Wave manually to begin this advanced start.' : (skyTerrorGatePending ? 'Auto Start is disabled for the Flying Demon warning.' : (els.autoStartBtn.disabled ? 'Auto Start is disabled for the Moosifer gate.' : 'Enable automatic wave starts during preparation phases.')));
   }
 
   function armAutoStartCountdown(force = false) {
@@ -26635,7 +27426,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     #startModeModal.start-wave-only-mode .intro-modal-header { min-height: 0; padding-top: 8px; padding-bottom: 8px; }
     #startModeModal.start-wave-only-mode .intro-modal-header h2 { margin: 0; line-height: 1.1; }
     .start-wave-choice-panel { display: grid; gap: 12px; margin: 12px 0; padding: 12px; border: 1px solid rgba(245, 224, 120, 0.26); border-radius: 8px; background: rgba(7, 10, 22, 0.36); }
+    .start-wave-choice-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
     .start-wave-choice-title { font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #f5df6d; }
+    .start-wave-chain-note { margin-top: 4px; font-size: 12px; color: rgba(247,240,211,0.78); }
+    .start-wave-chain-switcher { display: inline-flex; align-items: center; gap: 8px; color: rgba(255,245,204,0.86); font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+    .start-wave-chain-select { min-width: 150px; height: 36px; }
     .start-wave-choice-copy { margin: -3px 0 0; font-size: 15px; line-height: 1.42; color: rgba(247, 240, 211, 0.92); }
     .start-wave-choice-copy-unified { margin: 0; max-width: 96ch; }
     .start-wave-choice-reroll { margin: -2px 0 0; padding: 8px 10px; border: 1px solid rgba(255, 241, 107, 0.34); border-radius: 8px; background: rgba(132, 101, 14, 0.24); color: #fff2a8; font-size: 15px; line-height: 1.35; font-weight: 700; }
@@ -26696,11 +27491,14 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       align-self: stretch !important;
       justify-self: stretch !important;
     }
-    @media (max-width: 720px) { .start-wave-choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .start-wave-choice-head { align-items: stretch; flex-direction: column; } .start-wave-chain-switcher { justify-content: space-between; } .start-wave-chain-select { width: 100%; } .start-wave-choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .live-damage-report { width: 65%; max-width: 1120px; margin: 10px auto 0; padding: 7px 9px; border: 1px solid rgba(235, 220, 180, 0.18); border-radius: 12px; background: rgba(12, 18, 30, 0.94); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
     .live-damage-report.hidden { display: none; }
     .wave-roll-notice { position: absolute; transform: translateX(-50%); width: min(65%, 1120px); max-width: calc(100% - 24px); margin: 0; padding: 12px 16px; border: 1px solid rgba(255, 241, 107, 0.55); border-radius: 12px; background: linear-gradient(135deg, rgba(37, 20, 76, 0.96), rgba(127, 92, 0, 0.88)); color: #fff6b8; font-size: 20px; line-height: 1.25; font-weight: 900; text-align: center; text-shadow: 0 2px 0 rgba(0,0,0,0.55), 0 0 12px rgba(255, 241, 107, 0.28); box-shadow: 0 0 18px rgba(255, 241, 107, 0.24), inset 0 1px 0 rgba(255,255,255,0.08); z-index: 80; pointer-events: none; }
     .wave-roll-notice.hidden { display: none !important; }
+    .footer-topbar .hud-pill-gold { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 132px; padding: 9px 18px; border-color: rgba(255,221,91,0.74); background: radial-gradient(circle at 16% 28%, rgba(255,255,230,0.34), transparent 22px), linear-gradient(135deg, rgba(111,67,0,0.94), rgba(213,148,31,0.92) 52%, rgba(88,45,0,0.96)); color: #fff5bd; box-shadow: 0 0 16px rgba(255,201,64,0.24), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -8px 16px rgba(75,38,0,0.34); transform: translateY(-1px); }
+    .footer-topbar .hud-pill-gold::before { content: ""; width: 15px; height: 15px; flex: 0 0 15px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff8b8 0 16%, transparent 17%), radial-gradient(circle at 50% 50%, #ffe061 0 42%, #c77a08 43% 70%, #6e3b00 71% 100%); box-shadow: 0 0 8px rgba(255,218,82,0.62), inset 0 -1px 0 rgba(70,34,0,0.7); }
+    .footer-topbar .hud-pill-gold strong, .footer-topbar .hud-pill-gold span { text-shadow: 0 1px 0 rgba(0,0,0,0.62), 0 0 8px rgba(255,232,119,0.28); }
     .wave-rng-pill-more { background: linear-gradient(135deg, rgba(255,79,79,0.62), rgba(90,8,8,0.92)) !important; border-color: rgba(255,130,130,0.72) !important; color: #fff4f4 !important; }
     .wave-rng-pill-fewer { background: linear-gradient(135deg, rgba(109,255,155,0.55), rgba(12,91,39,0.92)) !important; border-color: rgba(139,255,174,0.72) !important; color: #effff3 !important; }
     .wave-rng-pill-double-gold { background: linear-gradient(135deg, rgba(255,184,74,0.62), rgba(133,66,0,0.94)) !important; border-color: rgba(255,209,106,0.75) !important; color: #fff7d4 !important; }
@@ -26710,6 +27508,18 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       0% { background: rgba(20,28,44,0.9); border-color: #2e3d58; box-shadow: none; color: inherit; }
       28% { background: linear-gradient(135deg, rgba(255,216,89,0.95), rgba(161,94,0,0.96)); border-color: rgba(255,235,125,0.95); box-shadow: 0 0 20px rgba(255,216,89,0.72), inset 0 0 14px rgba(255,255,210,0.24); color: #fff9cf; }
       100% { background: rgba(20,28,44,0.9); border-color: #2e3d58; box-shadow: none; color: inherit; }
+    }
+    .wave-gold-jackpot { position: fixed; left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); top: 35%; transform: translateY(-50%) scale(0.94); z-index: 220; display: grid; place-items: center; pointer-events: none; opacity: 0; animation: wave-gold-jackpot-burst 2500ms cubic-bezier(.16, 1, .3, 1) forwards; }
+    .wave-gold-jackpot.hidden { display: none !important; }
+    .wave-gold-jackpot-inner { width: min(1120px, 92vw); padding: clamp(16px, 2.6vw, 28px) clamp(18px, 4vw, 54px); border: 2px solid rgba(255,226,93,0.92); border-radius: 14px; background: radial-gradient(circle at 16% 18%, rgba(255,235,108,0.34), transparent 26%), radial-gradient(circle at 84% 76%, rgba(181,95,255,0.34), transparent 28%), linear-gradient(112deg, rgba(66,16,116,0.96), rgba(133,73,0,0.96) 52%, rgba(57,12,101,0.98)); box-shadow: 0 0 34px rgba(180,91,255,0.56), 0 0 42px rgba(255,210,76,0.38), inset 0 1px 0 rgba(255,255,255,0.18); text-align: center; }
+    .wave-gold-jackpot-kicker { display: block; color: #ffe675; font-size: clamp(13px, 1.4vw, 18px); letter-spacing: 0.15em; text-transform: uppercase; text-shadow: 0 2px 0 rgba(0,0,0,0.62); }
+    .wave-gold-jackpot-title { display: block; margin-top: 4px; color: #fff7c8; font-size: clamp(32px, 7vw, 86px); line-height: 0.95; font-weight: 900; text-transform: uppercase; text-shadow: 0 4px 0 rgba(35,8,70,0.76), 0 0 16px rgba(255,234,116,0.5), 0 0 26px rgba(197,102,255,0.42); }
+    .wave-gold-jackpot-subtitle { display: block; margin-top: 8px; color: #f7d6ff; font-size: clamp(14px, 2vw, 24px); text-shadow: 0 2px 0 rgba(0,0,0,0.58); }
+    @keyframes wave-gold-jackpot-burst {
+      0% { opacity: 0; transform: translateY(-50%) scale(0.86); filter: saturate(1.1); }
+      12% { opacity: 1; transform: translateY(-50%) scale(1.03); }
+      74% { opacity: 1; transform: translateY(-50%) scale(1); }
+      100% { opacity: 0; transform: translateY(-50%) scale(1.06); filter: saturate(1.35); }
     }
     .live-damage-report-header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
     .live-damage-report-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
@@ -26738,8 +27548,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     .wallet-hero-scan-line { display: flex; align-items: center; justify-content: center; gap: 9px; text-align: center; }
     .wallet-hero-scan-spinner { width: 15px; height: 15px; border-radius: 999px; border: 2px solid rgba(223,247,255,0.22); border-top-color: #9ce1ff; animation: walletHeroScanSpin 0.62s linear infinite; flex: 0 0 auto; }
     .wallet-hero-scan-track { position: relative; height: 50px; overflow: visible; border-radius: 999px; background: linear-gradient(90deg, rgba(156,225,255,0.10), rgba(120,243,164,0.14)); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
-    .wallet-hero-scan-runner { position: absolute; left: calc((100% - 152px) * var(--wallet-hero-scan-progress, 0)); bottom: -35px; width: 120px; height: 120px; object-fit: contain; image-rendering: pixelated; z-index: 2; filter: drop-shadow(0 0 9px rgba(156,225,255,0.78)); animation: walletHeroScanBob 0.22s ease-in-out infinite alternate; }
-    .wallet-hero-scan-portal { position: absolute; right: 7px; bottom: 3px; width: 34px; height: 42px; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 0 8px rgba(137, 240, 255, 0.55)); animation: walletHeroScanPortalPulse 0.8s ease-in-out infinite alternate; }
+    .wallet-hero-scan-runner { position: absolute; left: calc((100% - 126px) * var(--wallet-hero-scan-progress, 0)); bottom: 5px; width: 60px; height: 60px; object-fit: contain; image-rendering: pixelated; z-index: 2; filter: drop-shadow(0 0 9px rgba(156,225,255,0.78)); animation: walletHeroScanBob 0.22s ease-in-out infinite alternate; }
+    .wallet-hero-scan-portal { position: absolute; right: 7px; bottom: -16px; width: 68px; height: 84px; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 0 12px rgba(137, 240, 255, 0.72)); animation: walletHeroScanPortalPulse 0.8s ease-in-out infinite alternate; }
     .wallet-hero-scan-status.is-done .wallet-hero-scan-spinner { border-color: rgba(120,243,164,0.28); border-top-color: #78f3a4; animation: walletHeroScanPulse 0.75s ease-in-out infinite alternate; }
     @keyframes walletHeroScanSpin { to { transform: rotate(360deg); } }
     @keyframes walletHeroScanPulse { from { transform: scale(0.86); opacity: 0.68; } to { transform: scale(1.08); opacity: 1; } }
@@ -27229,6 +28039,62 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   };
   els.bountyBody?.addEventListener('input', handleResetWalletInputChange);
   els.questsBody?.addEventListener('input', handleResetWalletInputChange);
+  function submitDailyQuestClaimFromButton(claimBtn, event = null) {
+    if (!claimBtn || claimBtn.hasAttribute('disabled')) return false;
+    const questId = String(claimBtn.getAttribute('data-quest-id') || '').trim();
+    if (!questId) return false;
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    const now = Date.now();
+    if (game.lastDailyQuestClaimTap
+      && game.lastDailyQuestClaimTap.questId === questId
+      && (now - Number(game.lastDailyQuestClaimTap.at || 0)) < 650) {
+      return true;
+    }
+    game.lastDailyQuestClaimTap = { questId, at: now };
+    claimDailyQuest(questId).catch(() => {});
+    return true;
+  }
+
+  function getDailyQuestClaimButtonFromPoint(event, expandPx = 10) {
+    const target = event && event.target instanceof Element ? event.target : null;
+    const direct = target ? target.closest('[data-quest-id].bounty-claim-btn') : null;
+    if (direct) return direct;
+    if (!els.questsBody || typeof document.elementFromPoint !== 'function') return null;
+    const x = Number(event && event.clientX);
+    const y = Number(event && event.clientY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const elementAtPoint = document.elementFromPoint(x, y);
+    const pointButton = elementAtPoint instanceof Element ? elementAtPoint.closest('[data-quest-id].bounty-claim-btn') : null;
+    if (pointButton) return pointButton;
+    const buttons = Array.from(els.questsBody.querySelectorAll('[data-quest-id].bounty-claim-btn'));
+    return buttons.find((button) => {
+      const rect = button.getBoundingClientRect();
+      return x >= rect.left - expandPx
+        && x <= rect.right + expandPx
+        && y >= rect.top - expandPx
+        && y <= rect.bottom + expandPx;
+    }) || null;
+  }
+
+  let dailyQuestPointerClaimTarget = null;
+  els.questsBody?.addEventListener('pointerdown', (event) => {
+    dailyQuestPointerClaimTarget = getDailyQuestClaimButtonFromPoint(event, 12);
+  }, { capture: true });
+  els.questsBody?.addEventListener('pointerup', (event) => {
+    const releaseTarget = getDailyQuestClaimButtonFromPoint(event, 14);
+    const claimBtn = releaseTarget || dailyQuestPointerClaimTarget;
+    dailyQuestPointerClaimTarget = null;
+    if (!claimBtn) return;
+    submitDailyQuestClaimFromButton(claimBtn, event);
+  }, { capture: true });
+  els.questsBody?.addEventListener('pointercancel', () => {
+    dailyQuestPointerClaimTarget = null;
+  }, { capture: true });
+
   function handleBountyClaimButtonClick(event) {
     const claimBtn = event.target instanceof Element ? event.target.closest('.bounty-claim-btn') : null;
     if (!claimBtn) return false;
@@ -27276,6 +28142,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     }
     const currencyBtn = target ? target.closest('[data-daily-reward-currency]') : null;
     if (currencyBtn) {
+      event.preventDefault();
+      event.stopPropagation();
       const currency = String(currencyBtn.getAttribute('data-daily-reward-currency') || 'JEWEL').toUpperCase();
       setDailyQuestRewardCurrencySelection(currency);
       renderDailyQuestsBoard();
@@ -27284,6 +28152,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     }
     const resetBtn = target ? target.closest('[data-reset-daily-quests="true"]') : null;
     if (resetBtn) {
+      event.preventDefault();
+      event.stopPropagation();
       if (!canUseDailyQuestTestReset()) return;
       const targetWallet = normalizeAddress(game.dailyQuestBoard.resetWalletInput || getConnectedWalletAddress() || '');
       if (!isLikelyWalletAddress(targetWallet)) {
@@ -27306,7 +28176,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     }
     const claimBtn = target ? target.closest('[data-quest-id]') : null;
     if (!claimBtn) return;
-    claimDailyQuest(claimBtn.getAttribute('data-quest-id') || '').catch(() => {});
+    submitDailyQuestClaimFromButton(claimBtn, event);
   });
   els.closeKnownRelicsBtn?.addEventListener('click', closeKnownRelicsModal);
   els.closeTransferHeroesBtn?.addEventListener('click', closeTransferHeroesModal);
@@ -27966,9 +28836,31 @@ function getTopMenuDailyQuestResetText() {
   }
 }
 
+function getTopMenuWalletNativeBalanceText() {
+  try {
+    const wallet = window.DFKDefenseWallet && typeof window.DFKDefenseWallet.getState === 'function'
+      ? (window.DFKDefenseWallet.getState() || {})
+      : {};
+    if (!wallet.address) return 'Wallet: --';
+    const chainId = Number(wallet.activeChainId || 0);
+    const symbol = chainId === Number(window.DFK_RONIN_CHAIN_ID || 2020)
+      ? 'RON'
+      : (chainId === Number(window.DFK_AVAX_CHAIN_ID || 43114)
+        ? 'AVAX'
+        : (chainId === 53935 ? 'JEWEL' : String(wallet.nativeSymbol || 'Native')));
+    const rawBalance = Number(wallet && wallet.balance && wallet.balance.balance != null ? wallet.balance.balance : 0);
+    const balance = Number.isFinite(rawBalance) ? Math.max(0, rawBalance) : 0;
+    return `Wallet: ${balance.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${symbol}`;
+  } catch (_error) {
+    return 'Wallet: --';
+  }
+}
+
 function syncTopMenuWalletResources() {
   const trackingSource = document.getElementById('walletTrackingSummary');
   const trackingTarget = document.getElementById('walletTopTrackingSummary');
+  const nativeBalanceTarget = document.getElementById('walletTopNativeBalance');
+  const chainSelect = document.getElementById('walletTopChainSelect');
   const resetTarget = document.getElementById('walletTopResetTimer');
 
   let nextTrackingText = 'Tracked Runs: -- · Best Wave: --';
@@ -27985,6 +28877,16 @@ function syncTopMenuWalletResources() {
 
   try {
     if (trackingTarget && trackingTarget.textContent !== nextTrackingText) trackingTarget.textContent = nextTrackingText;
+    const nextNativeBalanceText = getTopMenuWalletNativeBalanceText();
+    if (nativeBalanceTarget && nativeBalanceTarget.textContent !== nextNativeBalanceText) nativeBalanceTarget.textContent = nextNativeBalanceText;
+    if (chainSelect && !chainSelect.dataset.switching) {
+      const wallet = window.DFKDefenseWallet && typeof window.DFKDefenseWallet.getState === 'function' ? (window.DFKDefenseWallet.getState() || {}) : {};
+      const chainId = Number(wallet.activeChainId || 0);
+      const nextValue = chainId === Number(window.DFK_AVAX_CHAIN_ID || 43114)
+        ? 'avax'
+        : (chainId === Number(window.DFK_RONIN_CHAIN_ID || 2020) ? 'ronin' : (chainId === 53935 ? 'dfk' : ''));
+      if (chainSelect.value !== nextValue) chainSelect.value = nextValue;
+    }
     if (resetTarget && resetTarget.textContent !== nextResetText) resetTarget.textContent = nextResetText;
   } catch (_error) {}
 }
@@ -28052,6 +28954,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { syncTopMenuWalletResources(); } catch (_error) {}
   try { installTopMenuWalletResourceSync(); } catch (_error) {}
   const topRefreshBtn = document.getElementById('walletTopRefreshBtn');
+  const topChainSelect = document.getElementById('walletTopChainSelect');
   if (topRefreshBtn && !topRefreshBtn.dataset.boundRefresh) {
     topRefreshBtn.dataset.boundRefresh = '1';
     topRefreshBtn.addEventListener('click', async () => {
@@ -28061,6 +28964,38 @@ document.addEventListener('DOMContentLoaded', () => {
         try { syncTopMenuWalletResources(); } catch (_error) {}
       } finally {
         window.setTimeout(() => { topRefreshBtn.disabled = false; }, 800);
+      }
+    });
+  }
+  if (topChainSelect && !topChainSelect.dataset.boundSwitchChain) {
+    topChainSelect.dataset.boundSwitchChain = '1';
+    if (!topChainSelect.dataset.chainSwitcherProtected) {
+      topChainSelect.dataset.chainSwitcherProtected = '1';
+      const stopMenuClose = (event) => {
+        if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+      };
+      ['pointerdown', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend'].forEach((eventName) => {
+        topChainSelect.addEventListener(eventName, stopMenuClose, { capture: true });
+      });
+    }
+    topChainSelect.addEventListener('change', async () => {
+      const chainKey = String(topChainSelect.value || '').trim();
+      if (!chainKey) return;
+      topChainSelect.dataset.switching = '1';
+      topChainSelect.disabled = true;
+      try {
+        if (!window.DFKDefenseWallet || typeof window.DFKDefenseWallet.switchChain !== 'function') {
+          throw new Error('Wallet chain switching is unavailable.');
+        }
+        await window.DFKDefenseWallet.switchChain(chainKey);
+        await refreshTopMenuData({ includeRunBalance: false }).catch(() => null);
+        syncTopMenuWalletResources();
+      } catch (error) {
+        showBanner(error && error.message ? error.message : 'Could not switch chains.', 2600);
+      } finally {
+        delete topChainSelect.dataset.switching;
+        topChainSelect.disabled = false;
+        syncTopMenuWalletResources();
       }
     });
   }

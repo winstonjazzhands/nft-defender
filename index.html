@@ -280,8 +280,15 @@
 <div class="wallet-top-balances" id="walletTopBalances">
 <div class="wallet-top-balance-row">
 <button class="wallet-top-refresh" id="walletTopRefreshBtn" type="button">Refresh</button>
+<select class="wallet-top-chain-select" id="walletTopChainSelect" aria-label="Switch chains">
+<option value="">Switch chains?</option>
+<option value="avax">AVAX</option>
+<option value="dfk">DFK Chain</option>
+<option value="ronin">Ronin</option>
+</select>
 </div>
 <div class="wallet-top-balance wallet-top-balance-small" id="walletTopTrackingSummary">Tracked Runs: -- · Best Wave: --</div>
+<div class="wallet-top-balance wallet-top-balance-small" id="walletTopNativeBalance">Wallet: --</div>
 <div class="wallet-top-balance wallet-top-balance-small" id="walletTopResetTimer">Reset timer: --</div>
 </div>
 <button class="dfk-news-open-btn" id="newsBtn" type="button" aria-controls="newsModal">News</button>
@@ -416,7 +423,7 @@
 <button class="small-action lean-action" id="restartBtn">New Run</button>
 <div class="topbar footer-topbar footer-topbar-separated">
 <div class="hud-pill hud-pill-portal"><strong>Portal HP:</strong> <span id="portalHp">2500/2500</span></div>
-<div class="hud-pill hud-pill-gold"><strong>Gold:</strong> <span id="jewelCount">0</span></div>
+<div class="hud-pill hud-pill-gold" title="Current in-game gold"><strong>Gold:</strong> <span id="jewelCount">0</span></div>
 <div class="hud-pill hud-pill-wave"><strong>Wave:</strong> <span id="waveCount">0</span></div>
 <div aria-hidden="true" style="display:none !important;">
 <span id="patternLabel">--</span>

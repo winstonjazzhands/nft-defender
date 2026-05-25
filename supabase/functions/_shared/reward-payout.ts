@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, encodeFunctionData, erc20Abi, http, isAddress, isAddressEqual, parseUnits } from "npm:viem@2.21.57";
 import { privateKeyToAccount } from "npm:viem@2.21.57/accounts";
-import { AVAX_CHAIN_ID, AVAX_RPC_URL, AVAX_TREASURY_ADDRESS, DFK_CHAIN_ID, DFK_HONK_TOKEN_ADDRESS, DFK_JEWEL_PAYMENT_ASSET, DFK_RPC_URL, TREASURY_ADDRESS, TREASURY_PRIVATE_KEY, requireEnv } from "./env.ts";
+import { AVAX_CHAIN_ID, AVAX_RPC_URL, AVAX_TREASURY_ADDRESS, DFK_CHAIN_ID, DFK_HONK_TOKEN_ADDRESS, DFK_JEWEL_PAYMENT_ASSET, DFK_RPC_URL, RONIN_CHAIN_ID, RONIN_RPC_URL, RON_TREASURY_ADDRESS, TREASURY_ADDRESS, TREASURY_PRIVATE_KEY, requireEnv } from "./env.ts";
 
 type AdminClient = {
   from: (table: string) => {
@@ -124,6 +124,15 @@ function getAvaxChainConfig() {
   } as const;
 }
 
+function getRoninChainConfig() {
+  return {
+    id: RONIN_CHAIN_ID,
+    name: "Ronin",
+    nativeCurrency: { name: "RON", symbol: "RON", decimals: 18 },
+    rpcUrls: { default: { http: [requireEnv("RONIN_RPC_URL", RONIN_RPC_URL)] } },
+  } as const;
+}
+
 function appendNote(existing: string | null | undefined, next: string) {
   const base = String(existing || "").trim();
   return base ? `${base} ${next}` : next;
@@ -173,13 +182,19 @@ function uniqueRpcCandidates(primary: string, fallbacks: string[]) {
   return out;
 }
 
-function getRpcCandidatesForCurrency(rewardCurrency: 'JEWEL' | 'AVAX' | 'HONK', primaryRpcUrl: string) {
+function getRpcCandidatesForCurrency(rewardCurrency: 'JEWEL' | 'AVAX' | 'HONK' | 'RON', primaryRpcUrl: string) {
   if (rewardCurrency === 'AVAX') {
     return uniqueRpcCandidates(primaryRpcUrl, [
       ...parseRpcList(Deno.env.get('AVAX_RPC_URL_FALLBACKS')),
       'https://api.avax.network/ext/bc/C/rpc',
       'https://avalanche.public-rpc.com',
       'https://1rpc.io/avax/c',
+    ]);
+  }
+  if (rewardCurrency === 'RON') {
+    return uniqueRpcCandidates(primaryRpcUrl, [
+      ...parseRpcList(Deno.env.get('RONIN_RPC_URL_FALLBACKS') || Deno.env.get('DFK_RONIN_RPC_URL_FALLBACKS')),
+      'https://api.roninchain.com/rpc',
     ]);
   }
   return uniqueRpcCandidates(primaryRpcUrl, parseRpcList(Deno.env.get('DFK_RPC_URL_FALLBACKS')));
@@ -257,10 +272,10 @@ export function isAutoRewardPayoutConfigured() {
 }
 
 async function sendNativePayout(admin: AdminClient, claim: RewardClaimRow, options: {
-  rewardCurrency: "JEWEL" | "AVAX" | "HONK";
+  rewardCurrency: "JEWEL" | "AVAX" | "HONK" | "RON";
   amountText: string;
   treasuryAddress: string;
-  chain: ReturnType<typeof getDfkChainConfig> | ReturnType<typeof getAvaxChainConfig>;
+  chain: ReturnType<typeof getDfkChainConfig> | ReturnType<typeof getAvaxChainConfig> | ReturnType<typeof getRoninChainConfig>;
   rpcUrl: string;
 }) {
   const privateKey = String(TREASURY_PRIVATE_KEY || "").trim();
@@ -458,7 +473,7 @@ export async function tryAutoPayRewardClaim(admin: AdminClient, claim: RewardCla
   }
 
   const currency = String(claim?.reward_currency || "").trim().toUpperCase();
-  if (!["JEWEL", "AVAX", "HONK"].includes(currency)) {
+  if (!["JEWEL", "AVAX", "HONK", "RON"].includes(currency)) {
     return { attempted: false, paid: false, message: `Auto-payout does not support ${currency || "this reward"}.` };
   }
 
@@ -469,6 +484,16 @@ export async function tryAutoPayRewardClaim(admin: AdminClient, claim: RewardCla
 
   if (currency === "HONK") {
     return await sendHonkPayout(admin, claim);
+  }
+
+  if (currency === "RON") {
+    return await sendNativePayout(admin, claim, {
+      rewardCurrency: "RON",
+      amountText,
+      treasuryAddress: RON_TREASURY_ADDRESS,
+      chain: getRoninChainConfig(),
+      rpcUrl: requireEnv("RONIN_RPC_URL", RONIN_RPC_URL),
+    });
   }
 
   if (currency === "JEWEL") {

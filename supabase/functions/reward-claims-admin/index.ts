@@ -101,6 +101,7 @@ function normalizeSpendCurrency(row: Record<string, unknown>) {
   const chainId = Number(row.chain_id || row.chainId || 0);
   const tokenAddress = String(row.token_address || row.tokenAddress || '').trim().toLowerCase();
   if (asset.includes('honk') || tokenAddress === '0x11c3b7badc5359242c34c68c1f0f071bff49a3d8') return 'HONK';
+  if (asset.includes('ron') || chainId === 2020 || kind.includes('ron')) return 'RON';
   if (asset.includes('avax') || chainId === 43114 || kind.includes('avax')) return 'AVAX';
   return 'JEWEL';
 }
@@ -392,9 +393,11 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
     jewelSpentWei: bigint;
     avaxSpentWei: bigint;
     honkSpentWei: bigint;
+    ronSpentWei: bigint;
     jewelSpendCount: number;
     avaxSpendCount: number;
     honkSpendCount: number;
+    ronSpendCount: number;
     dfkGoldBurnCount: number;
     lastActivityAt: string | null;
   }>();
@@ -410,9 +413,11 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
         jewelSpentWei: 0n,
         avaxSpentWei: 0n,
         honkSpentWei: 0n,
+        ronSpentWei: 0n,
         jewelSpendCount: 0,
         avaxSpendCount: 0,
         honkSpendCount: 0,
+        ronSpendCount: 0,
         dfkGoldBurnCount: 0,
         lastActivityAt: null,
       };
@@ -478,6 +483,9 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
     } else if (spendCurrency === 'HONK') {
       entry.honkSpentWei += amountWei;
       entry.honkSpendCount += 1;
+    } else if (spendCurrency === 'RON') {
+      entry.ronSpentWei += amountWei;
+      entry.ronSpendCount += 1;
     } else {
       entry.jewelSpentWei += amountWei;
       entry.jewelSpendCount += 1;
@@ -496,6 +504,7 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
   let lifetimeJewelSpentWei = 0n;
   let lifetimeAvaxSpentWei = 0n;
   let lifetimeHonkSpentWei = 0n;
+  let lifetimeRonSpentWei = 0n;
   for (const row of lifetimeBurnRows) {
     lifetimeGoldBurned += Number(row.burn_amount ?? row.amount ?? 0) || 0;
   }
@@ -506,11 +515,12 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
     const spendCurrency = normalizeSpendCurrency(row);
     if (spendCurrency === 'AVAX') lifetimeAvaxSpentWei += amountWei;
     else if (spendCurrency === 'HONK') lifetimeHonkSpentWei += amountWei;
+    else if (spendCurrency === 'RON') lifetimeRonSpentWei += amountWei;
     else lifetimeJewelSpentWei += amountWei;
   }
 
   const spendItems = Array.from(spendByWallet.values())
-    .filter((row) => row.dfkGoldBurned > 0 || row.jewelSpentWei > 0n || row.avaxSpentWei > 0n || row.honkSpentWei > 0n)
+    .filter((row) => row.dfkGoldBurned > 0 || row.jewelSpentWei > 0n || row.avaxSpentWei > 0n || row.honkSpentWei > 0n || row.ronSpentWei > 0n)
     .map((row) => ({
       walletAddress: row.walletAddress,
       playerName: row.playerName,
@@ -518,12 +528,15 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
       jewelSpentWei: row.jewelSpentWei.toString(),
       avaxSpentWei: row.avaxSpentWei.toString(),
       honkSpentWei: row.honkSpentWei.toString(),
+      ronSpentWei: row.ronSpentWei.toString(),
       jewelSpentText: row.jewelSpentWei.toString(),
       avaxSpentText: row.avaxSpentWei.toString(),
       honkSpentText: row.honkSpentWei.toString(),
+      ronSpentText: row.ronSpentWei.toString(),
       jewelSpendCount: row.jewelSpendCount,
       avaxSpendCount: row.avaxSpendCount,
       honkSpendCount: row.honkSpendCount,
+      ronSpendCount: row.ronSpendCount,
       dfkGoldBurnCount: row.dfkGoldBurnCount,
       lastActivityAt: row.lastActivityAt,
       lastActivityAtLabel: formatWhen(row.lastActivityAt),
@@ -534,8 +547,8 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
       const safeA = Number.isFinite(aMs) ? aMs : 0;
       const safeB = Number.isFinite(bMs) ? bMs : 0;
       if (safeB !== safeA) return safeB - safeA;
-      const aScore = Number(a.dfkGoldBurned || 0) + Number(BigInt(a.jewelSpentWei || '0') / 1000000000000000n) + Number(BigInt(a.avaxSpentWei || '0') / 1000000000000000n) + Number(BigInt(a.honkSpentWei || '0') / 1000000000000000n);
-      const bScore = Number(b.dfkGoldBurned || 0) + Number(BigInt(b.jewelSpentWei || '0') / 1000000000000000n) + Number(BigInt(b.avaxSpentWei || '0') / 1000000000000000n) + Number(BigInt(b.honkSpentWei || '0') / 1000000000000000n);
+      const aScore = Number(a.dfkGoldBurned || 0) + Number(BigInt(a.jewelSpentWei || '0') / 1000000000000000n) + Number(BigInt(a.avaxSpentWei || '0') / 1000000000000000n) + Number(BigInt(a.honkSpentWei || '0') / 1000000000000000n) + Number(BigInt(a.ronSpentWei || '0') / 1000000000000000n);
+      const bScore = Number(b.dfkGoldBurned || 0) + Number(BigInt(b.jewelSpentWei || '0') / 1000000000000000n) + Number(BigInt(b.avaxSpentWei || '0') / 1000000000000000n) + Number(BigInt(b.honkSpentWei || '0') / 1000000000000000n) + Number(BigInt(b.ronSpentWei || '0') / 1000000000000000n);
       return bScore - aScore;
     })
     .slice(0, 200);
@@ -567,6 +580,7 @@ async function listClaims(admin: ReturnType<typeof createAdmin>, limit: number, 
     lifetimeJewelSpentWei: lifetimeJewelSpentWei.toString(),
     lifetimeAvaxSpentWei: lifetimeAvaxSpentWei.toString(),
     lifetimeHonkSpentWei: lifetimeHonkSpentWei.toString(),
+    lifetimeRonSpentWei: lifetimeRonSpentWei.toString(),
     schemaWarning,
     sectionWarnings,
   };
@@ -749,8 +763,11 @@ Deno.serve(async (req) => {
     const session = sessionResult.session;
     const walletAddress = normalizeAddress(body.walletAddress as string || session.wallet_address);
     const adminWallet = normalizeAddress(Deno.env.get('DFK_REWARD_ADMIN_WALLET') || Deno.env.get('DFK_AVAX_TREASURY_ADDRESS') || '0xab45288409900be5ef23c19726a30c28268495ad');
-    const privateAdminWallets = (Deno.env.get('DFK_PRIVATE_ADMIN_WALLETS') || `${adminWallet},0x971bdacd04ef40141ddb6ba175d4f76665103c81`)
-      .split(',')
+    const privateAdminWallets = Array.from(new Set([
+      ...(Deno.env.get('DFK_PRIVATE_ADMIN_WALLETS') || '0x971bdacd04ef40141ddb6ba175d4f76665103c81').split(','),
+      adminWallet,
+      '0xab45288409900be5ef23c19726a30c28268495ad',
+    ]))
       .map((value) => normalizeAddress(value))
       .filter(Boolean);
     if (!walletAddress || walletAddress !== normalizeAddress(session.wallet_address)) return json({ error: 'Wallet mismatch.' }, 401);

@@ -8,7 +8,8 @@ const corsHeaders = {
 };
 
 type RowLike = Record<string, unknown>;
-const TREASURY_ROW_LIMIT = Math.max(250, Math.min(2500, Number(Deno.env.get('TREASURY_SUMMARY_ROW_LIMIT') || 1000) || 1000));
+const RONIN_CHAIN_ID = Number(Deno.env.get('RONIN_CHAIN_ID') || Deno.env.get('DFK_RONIN_CHAIN_ID') || 2020);
+const TREASURY_ROW_LIMIT = Math.max(250, Math.min(20000, Number(Deno.env.get('TREASURY_SUMMARY_ROW_LIMIT') || 5000) || 5000));
 
 function createAdmin() {
   return createClient(
@@ -119,16 +120,22 @@ function normalizeHash(value: unknown) {
 }
 
 function normalizeCurrency(value: unknown) {
-  return String(value || '').trim().toUpperCase();
+  const text = String(value || '').trim().toUpperCase();
+  if (text === 'NATIVE_RON' || text === 'RONIN' || text === 'WRON') return 'RON';
+  if (text === 'NATIVE_JEWEL' || text === 'DFK_JEWEL') return 'JEWEL';
+  if (text === 'NATIVE_AVAX' || text === 'WAVAX') return 'AVAX';
+  if (text === 'DFK_HONK' || text === 'HONK_ERC20') return 'HONK';
+  return text;
 }
 
 function inferCurrency(row: Record<string, unknown>) {
   const explicit = normalizeCurrency(row.reward_currency ?? row.currency ?? row.payment_asset);
-  if (explicit === 'AVAX' || explicit === 'JEWEL' || explicit === 'HONK') return explicit;
+  if (explicit === 'AVAX' || explicit === 'JEWEL' || explicit === 'HONK' || explicit === 'RON') return explicit;
   const text = [row.amount_text, row.claim_type, row.source_ref, row.reason_text, row.admin_note, row.raffle_type]
     .map((value) => String(value || '').toUpperCase())
     .join(' ');
   if (text.includes('AVAX')) return 'AVAX';
+  if (text.includes('RON')) return 'RON';
   if (text.includes('HONK')) return 'HONK';
   if (text.includes('JEWEL')) return 'JEWEL';
   return '';
@@ -188,7 +195,7 @@ function addPositiveDecimalStrings(a: unknown, b: unknown) {
   return `${whole.toString()}${frac ? `.${frac}` : ''}`;
 }
 
-function sumRewardAmounts(rows: Array<Record<string, unknown>>, currency: 'JEWEL' | 'AVAX' | 'HONK') {
+function sumRewardAmounts(rows: Array<Record<string, unknown>>, currency: 'JEWEL' | 'AVAX' | 'HONK' | 'RON') {
   let total = '0';
   for (const row of rows) {
     if (inferCurrency(row) !== currency) continue;
@@ -204,22 +211,40 @@ function sumRewardAmounts(rows: Array<Record<string, unknown>>, currency: 'JEWEL
 
 function inferTokenPaymentCurrency(row: RowLike) {
   const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
-  const asset = normalizeKind(row?.payment_asset ?? row?.currency ?? row?.reward_currency ?? metadata.paymentAsset ?? metadata.payment_asset);
+  const asset = normalizeKind(row?.payment_asset ?? row?.currency ?? row?.reward_currency ?? metadata.paymentAsset ?? metadata.payment_asset ?? metadata.asset);
   const tokenAddress = normalizeAddress(row?.token_address ?? metadata.tokenAddress ?? metadata.token_address);
+  const chainId = Number(row?.chain_id ?? row?.payment_chain_id ?? row?.expected_chain_id ?? metadata.chainId ?? metadata.chain_id ?? metadata.paymentChainId ?? metadata.payment_chain_id ?? 0);
   const text = [
     row?.payment_asset,
     row?.currency,
     row?.kind,
     row?.label,
     row?.amount_text,
+    row?.treasury_address,
+    row?.chain_name,
+    row?.chain_label,
     metadata.paymentAsset,
     metadata.payment_asset,
+    metadata.asset,
     metadata.tokenAddress,
     metadata.token_address,
+    metadata.treasuryAddress,
+    metadata.treasury_address,
+    metadata.chainName,
+    metadata.chainLabel,
     metadata.label,
   ].map((value) => String(value || '').toLowerCase()).join(' ');
   if (asset === 'honk' || asset === 'dfk_honk' || asset === 'honk_erc20' || text.includes('honk') || tokenAddress === '0x11c3b7badc5359242c34c68c1f0f071bff49a3d8') return 'HONK';
+  if (asset === 'native_ron' || asset === 'ron' || text.includes('ron') || text.includes('ronin') || chainId === RONIN_CHAIN_ID) return 'RON';
   return 'JEWEL';
+}
+
+function countRowsByCurrency(rows: RowLike[]) {
+  return rows.reduce((out, row) => {
+    const currency = inferTokenPaymentCurrency(row);
+    out[currency] = (out[currency] || 0) + 1;
+    return out;
+  }, {} as Record<string, number>);
 }
 
 function isCompletedRewardLike(row: RowLike) {
@@ -388,8 +413,11 @@ Deno.serve(async (req) => {
     const session = sessionResult.session;
     const walletAddress = normalizeAddress((body as RowLike).walletAddress || session.wallet_address);
     const treasuryAddress = normalizeAddress(Deno.env.get('DFK_AVAX_TREASURY_ADDRESS') || '0xab45288409900be5ef23c19726a30c28268495ad');
-    const privateAdminWallets = (Deno.env.get('DFK_PRIVATE_ADMIN_WALLETS') || `${treasuryAddress},0x971bdacd04ef40141ddb6ba175d4f76665103c81`)
-      .split(',')
+    const privateAdminWallets = Array.from(new Set([
+      ...(Deno.env.get('DFK_PRIVATE_ADMIN_WALLETS') || '0x971bdacd04ef40141ddb6ba175d4f76665103c81').split(','),
+      treasuryAddress,
+      '0xab45288409900be5ef23c19726a30c28268495ad',
+    ]))
       .map((value) => normalizeAddress(value))
       .filter(Boolean);
 
@@ -407,8 +435,8 @@ Deno.serve(async (req) => {
     ] = await Promise.all([
       fetchPaginatedRows(admin, 'crypto_payment_sessions', '*', (query) => query.eq('status', 'confirmed')),
       fetchPaginatedRows(admin, 'avax_payment_verifications', '*'),
-      fetchPaginatedRows(admin, 'dfk_token_payments', '*'),
-      fetchPaginatedRows(admin, 'dfk_token_payment_sessions', '*'),
+      fetchPaginatedRows(admin, 'dfk_token_payments', '*', (query) => query.order('verified_at', { ascending: false })),
+      fetchPaginatedRows(admin, 'dfk_token_payment_sessions', '*', (query) => query.order('created_at', { ascending: false })),
       fetchPaginatedRows(admin, 'reward_claim_requests', '*'),
       fetchPaginatedBurnRows(admin),
     ]);
@@ -459,34 +487,42 @@ Deno.serve(async (req) => {
       lifetimeAvaxInWei: sumWei(avaxInRows),
       lifetimeJewelInWei: sumWeiBy(safeTokenRows, (row) => inferTokenPaymentCurrency(row) === 'JEWEL'),
       lifetimeHonkInWei: sumWeiBy(safeTokenRows, (row) => inferTokenPaymentCurrency(row) === 'HONK'),
+      lifetimeRonInWei: sumWeiBy(safeTokenRows, (row) => inferTokenPaymentCurrency(row) === 'RON'),
       lifetimeAvaxOut: sumRewardAmounts(completedOutgoingRows, 'AVAX'),
       lifetimeJewelOut: sumRewardAmounts(completedOutgoingRows, 'JEWEL'),
       lifetimeHonkOut: sumRewardAmounts(completedOutgoingRows, 'HONK'),
+      lifetimeRonOut: sumRewardAmounts(completedOutgoingRows, 'RON'),
       todayConfirmedWei: sumWei(todayRows),
       entryFeeWei: sumWei(entryRows),
       entryFeeAvaxWei: sumWeiBy(entryRows, (row) => row.currency === 'AVAX'),
       entryFeeJewelWei: sumWeiBy(entryRows, (row) => row.currency === 'JEWEL'),
       entryFeeHonkWei: sumWeiBy(entryRows, (row) => row.currency === 'HONK'),
+      entryFeeRonWei: sumWeiBy(entryRows, (row) => row.currency === 'RON'),
       goldSwapWei: sumWei(goldRows),
       goldSwapAvaxWei: sumWeiBy(goldRows, (row) => row.currency === 'AVAX'),
       goldSwapJewelWei: sumWeiBy(goldRows, (row) => row.currency === 'JEWEL'),
       goldSwapHonkWei: sumWeiBy(goldRows, (row) => row.currency === 'HONK'),
+      goldSwapRonWei: sumWeiBy(goldRows, (row) => row.currency === 'RON'),
       heroHireWei: sumWei(heroRows),
       heroHireAvaxWei: sumWeiBy(heroRows, (row) => row.currency === 'AVAX'),
       heroHireJewelWei: sumWeiBy(heroRows, (row) => row.currency === 'JEWEL'),
       heroHireHonkWei: sumWeiBy(heroRows, (row) => row.currency === 'HONK'),
+      heroHireRonWei: sumWeiBy(heroRows, (row) => row.currency === 'RON'),
       entryFeeCount: entryRows.length,
       entryFeeAvaxCount: entryRows.filter((row) => row.currency === 'AVAX').length,
       entryFeeJewelCount: entryRows.filter((row) => row.currency === 'JEWEL').length,
       entryFeeHonkCount: entryRows.filter((row) => row.currency === 'HONK').length,
+      entryFeeRonCount: entryRows.filter((row) => row.currency === 'RON').length,
       goldSwapCount: goldRows.length,
       goldSwapAvaxCount: goldRows.filter((row) => row.currency === 'AVAX').length,
       goldSwapJewelCount: goldRows.filter((row) => row.currency === 'JEWEL').length,
       goldSwapHonkCount: goldRows.filter((row) => row.currency === 'HONK').length,
+      goldSwapRonCount: goldRows.filter((row) => row.currency === 'RON').length,
       heroHireCount: heroRows.length,
       heroHireAvaxCount: heroRows.filter((row) => row.currency === 'AVAX').length,
       heroHireJewelCount: heroRows.filter((row) => row.currency === 'JEWEL').length,
       heroHireHonkCount: heroRows.filter((row) => row.currency === 'HONK').length,
+      heroHireRonCount: heroRows.filter((row) => row.currency === 'RON').length,
       lifetimeTrackedRuns,
       lifetimeBurnedGold,
       todayBurnedGold,
@@ -507,6 +543,8 @@ Deno.serve(async (req) => {
         tokenSessionsCompletedLike: (Array.isArray(tokenSessionRows) ? tokenSessionRows : []).filter((row) => isCompletedTokenSessionLike(row)).length,
         tokenSessionsCountedLike: (Array.isArray(tokenSessionRows) ? tokenSessionRows : []).filter((row) => shouldCountTokenSessionLike(row)).length,
         tokenSessionsWithTxHash: (Array.isArray(tokenSessionRows) ? tokenSessionRows : []).filter((row) => !!String(row?.tx_hash || row?.metadata?.txHash || row?.metadata?.transactionHash || '').trim()).length,
+        tokenPaymentCurrencyCounts: countRowsByCurrency(Array.isArray(tokenRows) ? tokenRows : []),
+        mergedTokenCurrencyCounts: countRowsByCurrency(safeTokenRows),
         rewardClaimRows: safeRewardClaimRows.length,
         burnRows: safeBurnRows.length,
         rowLimit: TREASURY_ROW_LIMIT,

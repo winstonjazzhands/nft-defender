@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { DFK_CHAIN_ID, DFK_HONK_PAYMENT_ASSET, DFK_HONK_TOKEN_ADDRESS, DFK_JEWEL_PAYMENT_ASSET } from "../_shared/env.ts";
-import { verifyErc20TransferTx, verifyNativeJewelTransferTx } from "../_shared/chain.ts";
+import { DFK_CHAIN_ID, DFK_HONK_PAYMENT_ASSET, DFK_HONK_TOKEN_ADDRESS, DFK_JEWEL_PAYMENT_ASSET, RONIN_CHAIN_ID } from "../_shared/env.ts";
+import { verifyErc20TransferTx, verifyNativeJewelTransferTx, verifyNativeRonTransferTx } from "../_shared/chain.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -31,7 +31,9 @@ Deno.serve(async (req) => {
     if (session.status === "verified") {
       return Response.json({ ok: true, alreadyVerified: true, verifiedAt: session.verified_at }, { headers: corsHeaders });
     }
-    if (Number(session.chain_id) !== DFK_CHAIN_ID) throw new Error("Session chain mismatch.");
+    const paymentAsset = String(session.payment_asset || DFK_JEWEL_PAYMENT_ASSET).trim().toLowerCase();
+    const expectedChainId = paymentAsset === "native_ron" || paymentAsset === "ron" ? RONIN_CHAIN_ID : DFK_CHAIN_ID;
+    if (Number(session.chain_id) !== expectedChainId) throw new Error("Session chain mismatch.");
 
     const submittedAt = new Date().toISOString();
     const { error: markSubmittedError } = await supabase
@@ -44,13 +46,18 @@ Deno.serve(async (req) => {
 
     if (markSubmittedError) console.warn("verify-dfk-token-payment could not mark session submitted", markSubmittedError);
 
-    const paymentAsset = String(session.payment_asset || DFK_JEWEL_PAYMENT_ASSET).trim().toLowerCase();
     const verified = paymentAsset === DFK_HONK_PAYMENT_ASSET
       ? await verifyErc20TransferTx(
         txHash,
         String(session.token_address || DFK_HONK_TOKEN_ADDRESS),
         session.wallet_address,
         session.treasury_address,
+        BigInt(String(session.expected_amount_wei)),
+      )
+      : (paymentAsset === "native_ron" || paymentAsset === "ron")
+      ? await verifyNativeRonTransferTx(
+        txHash,
+        session.wallet_address,
         BigInt(String(session.expected_amount_wei)),
       )
       : await verifyNativeJewelTransferTx(

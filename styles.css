@@ -2629,10 +2629,10 @@ body{
 
 .tile-axie-pet {
   position: absolute;
-  left: 2%;
-  bottom: 4%;
-  width: 55%;
-  height: 55%;
+  left: 0%;
+  bottom: 7%;
+  width: 66%;
+  height: 66%;
   object-fit: contain;
   object-position: center bottom;
   z-index: 6;
@@ -2647,25 +2647,14 @@ body{
 }
 
 .tile-has-axie-pet::after {
-  content: "";
-  position: absolute;
-  left: 4%;
-  bottom: 5%;
-  width: 39%;
-  height: 16%;
-  border-radius: 50%;
-  z-index: 5;
-  pointer-events: none;
-  background: radial-gradient(ellipse at center, rgba(152,244,255,0.52) 0%, rgba(152,244,255,0.22) 48%, rgba(152,244,255,0) 72%);
-  filter: blur(1px);
-  animation: axiePetGlowBreathe 1.85s ease-in-out infinite;
+  content: none;
 }
 
 .tile-axie-pet--warrior {
-  left: -1%;
-  bottom: 2%;
-  width: 62%;
-  height: 62%;
+  left: -2%;
+  bottom: 7%;
+  width: 72%;
+  height: 72%;
 }
 
 @keyframes axiePetRoll {
@@ -3539,9 +3528,75 @@ body{
 }
 
 .footer-topbar .hud-pill-portal { min-width: 142px; }
-.footer-topbar .hud-pill-gold,
 .footer-topbar .hud-pill-wave { min-width: 90px; }
+.footer-topbar .hud-pill-gold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 132px;
+  padding: 9px 18px;
+  border-color: rgba(255, 221, 91, 0.74);
+  background:
+    radial-gradient(circle at 16% 28%, rgba(255,255,230,0.34), transparent 22px),
+    linear-gradient(135deg, rgba(111, 67, 0, 0.94), rgba(213, 148, 31, 0.92) 52%, rgba(88, 45, 0, 0.96));
+  color: #fff5bd;
+  box-shadow:
+    0 0 16px rgba(255, 201, 64, 0.24),
+    inset 0 1px 0 rgba(255,255,255,0.15),
+    inset 0 -8px 16px rgba(75, 38, 0, 0.34);
+  transform: translateY(-1px);
+}
+
+.footer-topbar .hud-pill-gold::before {
+  content: "";
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #fff8b8 0 16%, transparent 17%),
+    radial-gradient(circle at 50% 50%, #ffe061 0 42%, #c77a08 43% 70%, #6e3b00 71% 100%);
+  box-shadow: 0 0 8px rgba(255, 218, 82, 0.62), inset 0 -1px 0 rgba(70, 34, 0, 0.7);
+}
+
+.footer-topbar .hud-pill-gold strong,
+.footer-topbar .hud-pill-gold span {
+  text-shadow: 0 1px 0 rgba(0,0,0,0.62), 0 0 8px rgba(255, 232, 119, 0.28);
+}
 .footer-topbar .hud-pill strong { margin-right: 4px; }
+
+.footer-topbar .hud-pill-wave.wave-rng-pill-more,
+.hud-pill-wave.wave-rng-pill-more {
+  background: linear-gradient(135deg, rgba(255,79,79,0.62), rgba(90,8,8,0.92)) !important;
+  border-color: rgba(255,130,130,0.72) !important;
+  color: #fff4f4 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 14px rgba(255,79,79,0.28) !important;
+}
+
+.footer-topbar .hud-pill-wave.wave-rng-pill-fewer,
+.hud-pill-wave.wave-rng-pill-fewer {
+  background: linear-gradient(135deg, rgba(109,255,155,0.55), rgba(12,91,39,0.92)) !important;
+  border-color: rgba(139,255,174,0.72) !important;
+  color: #effff3 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 14px rgba(109,255,155,0.24) !important;
+}
+
+.footer-topbar .hud-pill-wave.wave-rng-pill-double-gold,
+.hud-pill-wave.wave-rng-pill-double-gold {
+  background: linear-gradient(135deg, rgba(255,184,74,0.62), rgba(133,66,0,0.94)) !important;
+  border-color: rgba(255,209,106,0.75) !important;
+  color: #fff7d4 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 14px rgba(255,184,74,0.28) !important;
+}
+
+.footer-topbar .hud-pill-wave.wave-rng-pill-gold-drop,
+.hud-pill-wave.wave-rng-pill-gold-drop {
+  background: linear-gradient(135deg, rgba(196,124,255,0.62), rgba(64,20,132,0.94)) !important;
+  border-color: rgba(214,161,255,0.78) !important;
+  color: #fbf3ff !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 14px rgba(196,124,255,0.30) !important;
+}
 
 .gold-earned-pulse {
   animation: gold-earned-pill-flash 760ms ease-out;
@@ -3566,6 +3621,78 @@ body{
     box-shadow: none;
     color: inherit;
   }
+}
+
+.wave-gold-jackpot {
+  position: fixed;
+  left: max(14px, env(safe-area-inset-left));
+  right: max(14px, env(safe-area-inset-right));
+  top: 35%;
+  transform: translateY(-50%) scale(0.94);
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  animation: wave-gold-jackpot-burst 2500ms cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.wave-gold-jackpot.hidden {
+  display: none !important;
+}
+
+.wave-gold-jackpot-inner {
+  width: min(1120px, 92vw);
+  padding: clamp(16px, 2.6vw, 28px) clamp(18px, 4vw, 54px);
+  border: 2px solid rgba(255, 226, 93, 0.92);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(255, 235, 108, 0.34), transparent 26%),
+    radial-gradient(circle at 84% 76%, rgba(181, 95, 255, 0.34), transparent 28%),
+    linear-gradient(112deg, rgba(66, 16, 116, 0.96), rgba(133, 73, 0, 0.96) 52%, rgba(57, 12, 101, 0.98));
+  box-shadow:
+    0 0 34px rgba(180, 91, 255, 0.56),
+    0 0 42px rgba(255, 210, 76, 0.38),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+  text-align: center;
+}
+
+.wave-gold-jackpot-kicker {
+  display: block;
+  color: #ffe675;
+  font-size: clamp(13px, 1.4vw, 18px);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.62);
+}
+
+.wave-gold-jackpot-title {
+  display: block;
+  margin-top: 4px;
+  color: #fff7c8;
+  font-size: clamp(32px, 7vw, 86px);
+  line-height: 0.95;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow:
+    0 4px 0 rgba(35, 8, 70, 0.76),
+    0 0 16px rgba(255, 234, 116, 0.5),
+    0 0 26px rgba(197, 102, 255, 0.42);
+}
+
+.wave-gold-jackpot-subtitle {
+  display: block;
+  margin-top: 8px;
+  color: #f7d6ff;
+  font-size: clamp(14px, 2vw, 24px);
+  text-shadow: 0 2px 0 rgba(0,0,0,0.58);
+}
+
+@keyframes wave-gold-jackpot-burst {
+  0% { opacity: 0; transform: translateY(-50%) scale(0.86); filter: saturate(1.1); }
+  12% { opacity: 1; transform: translateY(-50%) scale(1.03); }
+  74% { opacity: 1; transform: translateY(-50%) scale(1); }
+  100% { opacity: 0; transform: translateY(-50%) scale(1.06); filter: saturate(1.35); }
 }
 
 .controls-stack {
@@ -7243,6 +7370,14 @@ body.elite-wave-shake .elite-wave-modal-card { animation: eliteWaveShake 0.5s ea
   min-width: 140px;
 }
 
+.milestone-hero-offer-btn:disabled,
+.milestone-hero-offer-btn.milestone-hero-offer-btn-disabled {
+  opacity: 0.42;
+  filter: grayscale(0.75) saturate(0.45);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .milestone-hero-offer-note {
   width: 100%;
   text-align: center;
@@ -7252,6 +7387,35 @@ body.elite-wave-shake .elite-wave-modal-card { animation: eliteWaveShake 0.5s ea
   padding-top: 2px;
 }
 
+.milestone-hero-wallet-balance {
+  display: block;
+  margin-top: 8px;
+  color: #fff2a8;
+  font-size: 1.5em;
+  font-weight: 900;
+}
+
+.milestone-hero-chain-switcher {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255, 245, 204, 0.86);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.milestone-hero-chain-select {
+  min-width: 168px;
+  height: 38px;
+}
+
 @media (max-width: 760px) {
   .milestone-hero-offer-actions {
     flex-direction: column;
@@ -7259,6 +7423,16 @@ body.elite-wave-shake .elite-wave-modal-card { animation: eliteWaveShake 0.5s ea
   }
 
   .milestone-hero-offer-btn {
+    width: 100%;
+  }
+
+  .milestone-hero-chain-switcher {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .milestone-hero-chain-select {
     width: 100%;
   }
 }
@@ -9355,6 +9529,30 @@ body.story-active #startModeModal.modal-primed-under-intro button {
   opacity:.7;
   cursor:not-allowed;
 }
+.wallet-top-chain-select{
+  min-width:132px;
+  height:36px;
+  border:1px solid rgba(255,238,93,0.42);
+  border-radius:8px;
+  background:rgba(27,24,8,0.92);
+  color:#fff3a6;
+  font:inherit;
+  font-size:11px;
+  font-weight:800;
+  padding:0 28px 0 10px;
+  cursor:pointer;
+  position:relative;
+  z-index:25;
+  touch-action:manipulation;
+}
+.wallet-top-chain-select:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+.wallet-top-chain-select option{
+  background:#1b1808;
+  color:#fff3a6;
+}
 
 
 .reward-claims-rollup-btn{
@@ -9811,6 +10009,11 @@ body #bountyModal .intro-body.bounty-body {
   touch-action: auto;
 }
 
+#questsModal:not(.hidden),
+#bountyModal:not(.hidden) {
+  display: flex !important;
+}
+
 #questsModal .intro-modal-card,
 #bountyModal .intro-modal-card,
 #questsModal .intro-body,
@@ -9818,6 +10021,13 @@ body #bountyModal .intro-body.bounty-body {
 #questsModal button,
 #bountyModal button {
   pointer-events: auto !important;
+}
+
+#questsModal .intro-modal-card,
+#bountyModal .intro-modal-card {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
 }
 
 body.intro-open #avaxTreasuryPanel,
@@ -9919,7 +10129,23 @@ button,
 #questsModal button,
 #bountyModal button {
   position: relative;
-  z-index: 1;
+  z-index: 5;
+}
+
+#questsModal .quest-card {
+  isolation: isolate;
+}
+
+#questsModal .quest-card .bounty-claim-btn {
+  min-height: 44px;
+  pointer-events: auto !important;
+}
+
+#questsModal .quest-card .bounty-claim-btn::before {
+  content: '';
+  position: absolute;
+  inset: -8px -6px;
+  border-radius: 14px;
 }
 
 @media (max-width: 1024px) and (orientation: landscape) {
@@ -12093,9 +12319,9 @@ body .relic-modal:not(.hidden) {
   position: fixed !important;
   inset: 0 !important;
   display: flex !important;
-  align-items: flex-start !important;
+  align-items: center !important;
   justify-content: center !important;
-  padding: max(24px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)) !important;
+  padding: max(32px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)) !important;
   background: rgba(0, 0, 0, 0.62) !important;
   z-index: 130500 !important;
   overflow: hidden !important;
@@ -12104,7 +12330,7 @@ body .relic-modal:not(.hidden) .relic-modal-card {
   position: relative !important;
   width: min(960px, calc(100vw - 28px)) !important;
   max-width: min(960px, calc(100vw - 28px)) !important;
-  max-height: calc(100dvh - 48px) !important;
+  max-height: calc(100dvh - 64px) !important;
   margin: 0 auto !important;
   overflow: auto !important;
   transform: none !important;

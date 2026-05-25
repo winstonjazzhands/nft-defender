@@ -67,7 +67,30 @@ function formatAmountText(amountValue: number | null, rewardCurrency: string | n
   return `${normalizedAmount} ${rewardCurrency}`.trim();
 }
 
+function inferRewardCurrency(rewardText: string, requestedRewardCurrency: string) {
+  const requested = String(requestedRewardCurrency || '').trim().toUpperCase();
+  if (['JEWEL', 'AVAX', 'HONK', 'RON'].includes(requested)) return requested;
+  const text = String(rewardText || '').trim();
+  if (/\bron\b/i.test(text)) return 'RON';
+  if (/\bhonk\b/i.test(text)) return 'HONK';
+  if (/\bavax\b/i.test(text)) return 'AVAX';
+  if (/\bjewel\b/i.test(text)) return 'JEWEL';
+  return null;
+}
+
 const PRIVATE_DAILY_QUEST_TEST_RESET_WALLET = '0x971bdacd04ef40141ddb6ba175d4f76665103c81';
+const DEFAULT_AUTO_DAILY_REWARD_WALLETS = [
+  PRIVATE_DAILY_QUEST_TEST_RESET_WALLET,
+  '0xba42e89b2f69c68e79898ba73d9a4eb13d25c70e',
+];
+
+function getAutoDailyRewardWallets() {
+  const envWallets = String(Deno.env.get('DFK_AUTO_DAILY_REWARD_WALLETS') || Deno.env.get('DFK_PRIVATE_ADMIN_WALLETS') || '')
+    .split(',')
+    .map((value) => normalizeAddress(value))
+    .filter(Boolean);
+  return Array.from(new Set([...DEFAULT_AUTO_DAILY_REWARD_WALLETS, ...envWallets]));
+}
 
 async function findQualifyingRunForClaim(admin: ReturnType<typeof createAdmin>, walletAddress: string, dayStartIso: string) {
   const attempts = [
@@ -173,11 +196,19 @@ async function getWhitelistDecision(
     .eq('wallet_address', walletAddress)
     .maybeSingle();
   if (ruleError) throw ruleError;
-  if (!rule) return { autoApprove: false, note: '', reason: 'No whitelist entry found for this wallet.' };
+  const isDefaultAutoDailyWallet = claimType === 'daily_quest' && getAutoDailyRewardWallets().includes(walletAddress);
+  if (!rule && !isDefaultAutoDailyWallet) return { autoApprove: false, note: '', reason: 'No whitelist entry found for this wallet.' };
+  if (!rule && isDefaultAutoDailyWallet) {
+    return {
+      autoApprove: true,
+      note: 'Auto-approved by default daily reward wallet rule.',
+      reason: 'Default daily reward wallet auto-approval allowed this claim.',
+    };
+  }
   if (!rule.is_active) return { autoApprove: false, note: String(rule.notes || '').trim() || '', reason: 'Whitelist entry is inactive.' };
 
   const allowsType = claimType === 'daily_quest' ? !!rule.auto_daily : !!rule.auto_bounty;
-  if (!allowsType) {
+  if (!allowsType && !isDefaultAutoDailyWallet) {
     return {
       autoApprove: false,
       note: String(rule.notes || '').trim() || '',
@@ -210,6 +241,7 @@ async function getWhitelistDecision(
   }
 
   const noteParts = ['Auto-approved by whitelist rule.'];
+  if (!allowsType && isDefaultAutoDailyWallet) noteParts.push('Default daily reward wallet override enabled auto_daily.');
   const notes = String(rule.notes || '').trim();
   if (notes) noteParts.push(notes);
   return { autoApprove: true, note: noteParts.join(' '), reason: 'Whitelist auto-approval allowed this claim.' };
@@ -218,26 +250,22 @@ async function getWhitelistDecision(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { status: 200, headers: corsHeaders });
   try {
-    const authHeader = req.headers.get('Authorization') || '';
-    const fallbackHeader = req.headers.get('x-session-token') || '';
-    const token = String(fallbackHeader).trim() || authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!token) return json({ error: 'Enable run tracking before claiming a reward.' }, 401);
+    const body = await req.clone().json().catch(() => ({}));
+    const requestHeaders = new Headers(req.headers);
+    const bodySessionToken = String((body as Record<string, unknown>)?.sessionToken || '').trim();
+    if (bodySessionToken && !String(requestHeaders.get('x-session-token') || '').trim()) {
+      requestHeaders.set('x-session-token', bodySessionToken);
+    }
 
     const admin = createAdmin();
-    const { data: session, error: sessionError } = await admin
-      .from('wallet_sessions')
-      .select('session_token, wallet_address, expires_at, revoked_at, session_origin, user_agent_hash')
-      .eq('session_token', token)
-      .single();
-    if (sessionError || !session) return json({ error: 'Session not found.' }, 401);
-    const contextError = await validateSessionContext(req, session as Record<string, unknown>);
-    if (contextError) return contextError;
-    if (session.revoked_at) return json({ error: 'Session revoked.' }, 401);
-    if (Date.now() >= new Date(session.expires_at).getTime()) return json({ error: 'Session expired.' }, 401);
+    const sessionReq = new Request(req.url, { method: req.method, headers: requestHeaders });
+    const sessionResult = await loadValidWalletSession(admin, sessionReq, corsHeaders, { validateContext: true });
+    if (sessionResult.response) return sessionResult.response;
+    const session = sessionResult.session;
+    if (!session) return json({ error: 'Session not found.', code: 'session_not_found' }, 401);
 
-    const body = await req.json().catch(() => ({}));
     const walletAddress = normalizeAddress(body.walletAddress as string);
-    if (!walletAddress || walletAddress !== normalizeAddress(session.wallet_address)) return json({ error: 'Wallet mismatch.' }, 401);
+    if (!walletAddress || walletAddress !== normalizeAddress(session.wallet_address)) return json({ error: 'Wallet mismatch.', code: 'wallet_mismatch' }, 401);
 
     const claimType = String(body.claimType || '').trim().toLowerCase();
     if (claimType !== 'daily_quest') return json({ error: 'Unsupported reward claim type.' }, 400);
@@ -281,7 +309,7 @@ Deno.serve(async (req) => {
     const amountValue = Number.isFinite(requestedRewardAmountValue) && requestedRewardAmountValue > 0
       ? requestedRewardAmountValue
       : parseAmountValue(rewardText);
-    const rewardCurrency = requestedRewardCurrency || (/jewel/i.test(rewardText) ? 'JEWEL' : (/avax/i.test(rewardText) ? 'AVAX' : null));
+    const rewardCurrency = inferRewardCurrency(rewardText, requestedRewardCurrency);
     const canonicalAmountText = formatAmountText(amountValue, rewardCurrency, rewardText);
     const authorizedTestResetCycle = walletAddress === PRIVATE_DAILY_QUEST_TEST_RESET_WALLET ? requestedTestResetCycle : 0;
     const whitelistDecision = await getWhitelistDecision(admin, walletAddress, 'daily_quest', amountValue, claimDay, {
@@ -301,33 +329,73 @@ Deno.serve(async (req) => {
       let existingMessage = (existingClaim.status === 'paid' || existingClaim.tx_hash)
         ? `${questName} was already paid from treasury.`
         : `${questName} was already submitted earlier today.`;
+      let existingPayoutAttempted = false;
+      let existingPayoutAttemptId: string | null = null;
+      let existingPayoutFailureReason = String(existingClaim.failure_reason || '').trim() || null;
 
       // If a whitelisted claim was created/approved but the client never received a payout
       // tx (or an older build failed before paying), retry the auto-payout on repeat calls.
       // This lets the frontend polling path recover and show the tx-backed “hell yeah” screen.
       const existingClaimApproved = String(existingClaim.status || '').trim().toLowerCase() === 'approved'
         || !!String(existingClaim.approved_at || '').trim();
-      if (existingClaimApproved && !String(existingClaim.tx_hash || '').trim() && isAutoRewardPayoutConfigured()) {
+      let claimForPayout = existingClaim;
+      const existingClaimPending = String(existingClaim.status || '').trim().toLowerCase() === 'pending';
+      if (!existingClaimApproved && existingClaimPending && whitelistDecision.autoApprove) {
+        const nowIso = new Date().toISOString();
+        const upgradedNote = [existingClaim.admin_note || null, whitelistDecision.note || null, 'Pending claim upgraded to auto-approved on retry.'].filter(Boolean).join(' ') || null;
+        const { data: upgradedClaim, error: upgradeError } = await admin
+          .from('reward_claim_requests')
+          .update({
+            status: 'approved',
+            approved_at: existingClaim.approved_at || nowIso,
+            resolved_at: existingClaim.resolved_at || nowIso,
+            resolved_by_wallet: existingClaim.resolved_by_wallet || 'whitelist:auto',
+            reward_currency: existingClaim.reward_currency || rewardCurrency,
+            amount_value: existingClaim.amount_value ?? amountValue,
+            amount_text: existingClaim.amount_text || canonicalAmountText,
+            admin_note: upgradedNote,
+            failure_reason: null,
+          })
+          .eq('id', existingClaim.id)
+          .select('id, status, tx_hash, paid_at, reward_currency, amount_value, amount_text, wallet_address, admin_note, approved_at, resolved_at, resolved_by_wallet, failure_reason')
+          .single();
+        if (upgradeError) throw upgradeError;
+        if (upgradedClaim?.id) {
+          claimForPayout = upgradedClaim;
+          existingStatus = 'approved';
+          existingMessage = `${questName} claim auto-approved for this whitelisted wallet. Retrying treasury payout.`;
+        }
+      }
+
+      const claimApprovedForPayout = String(claimForPayout.status || '').trim().toLowerCase() === 'approved'
+        || !!String(claimForPayout.approved_at || '').trim();
+      if (claimApprovedForPayout && !String(claimForPayout.tx_hash || '').trim() && isAutoRewardPayoutConfigured()) {
         const payoutResult = await tryAutoPayRewardClaim(admin, {
-          id: existingClaim.id,
-          wallet_address: existingClaim.wallet_address || walletAddress,
-          status: existingClaim.status,
-          amount_value: existingClaim.amount_value ?? amountValue,
-          reward_currency: existingClaim.reward_currency || rewardCurrency,
-          amount_text: existingClaim.amount_text || canonicalAmountText,
-          admin_note: existingClaim.admin_note,
-          approved_at: existingClaim.approved_at,
-          resolved_at: existingClaim.resolved_at,
-          resolved_by_wallet: existingClaim.resolved_by_wallet,
-          tx_hash: existingClaim.tx_hash,
-          paid_at: existingClaim.paid_at,
-          failure_reason: existingClaim.failure_reason,
+          id: claimForPayout.id,
+          wallet_address: claimForPayout.wallet_address || walletAddress,
+          status: claimForPayout.status,
+          amount_value: claimForPayout.amount_value ?? amountValue,
+          reward_currency: claimForPayout.reward_currency || rewardCurrency,
+          amount_text: claimForPayout.amount_text || canonicalAmountText,
+          admin_note: claimForPayout.admin_note,
+          approved_at: claimForPayout.approved_at,
+          resolved_at: claimForPayout.resolved_at,
+          resolved_by_wallet: claimForPayout.resolved_by_wallet,
+          tx_hash: claimForPayout.tx_hash,
+          paid_at: claimForPayout.paid_at,
+          failure_reason: claimForPayout.failure_reason,
         });
         if (payoutResult.paid) {
+          existingPayoutAttempted = !!payoutResult.attempted;
+          existingPayoutAttemptId = payoutResult.payoutAttemptId || null;
+          existingPayoutFailureReason = null;
           existingStatus = 'paid';
           existingTxHash = payoutResult.txHash || null;
           existingMessage = `${questName} paid automatically from treasury.`;
         } else if (payoutResult.attempted) {
+          existingPayoutAttempted = true;
+          existingPayoutAttemptId = payoutResult.payoutAttemptId || null;
+          existingPayoutFailureReason = payoutResult.failureReason || payoutResult.message || null;
           existingStatus = 'approved';
           existingTxHash = payoutResult.txHash || null;
           existingMessage = `${questName} auto-approved, but treasury payout failed and needs review: ${payoutResult.message}`;
@@ -344,6 +412,9 @@ Deno.serve(async (req) => {
         rewardAmountText: existingClaim.amount_text || canonicalAmountText,
         whitelistAutoApproved: false,
         whitelistReason: 'Claim already exists for this wallet and quest today.',
+        payoutAttempted: existingPayoutAttempted,
+        payoutAttemptId: existingPayoutAttemptId,
+        payoutFailureReason: existingPayoutFailureReason,
         message: existingMessage,
       });
     }
@@ -377,6 +448,9 @@ Deno.serve(async (req) => {
 
     let status = inserted?.status || 'pending';
     let txHash = inserted?.tx_hash || null;
+    let payoutAttempted = false;
+    let payoutAttemptId: string | null = null;
+    let payoutFailureReason: string | null = null;
     let message = whitelistDecision.autoApprove
       ? `${questName} claim auto-approved for this whitelisted wallet.`
       : `${questName} claim sent for payout review.`;
@@ -397,12 +471,16 @@ Deno.serve(async (req) => {
         paid_at: inserted.paid_at,
         failure_reason: inserted.failure_reason,
       });
+      payoutAttempted = !!payoutResult.attempted;
+      payoutAttemptId = payoutResult.payoutAttemptId || null;
       if (payoutResult.paid) {
         status = 'paid';
         txHash = payoutResult.txHash || null;
         message = `${questName} paid automatically from treasury.`;
       } else if (payoutResult.attempted) {
         status = 'approved';
+        txHash = payoutResult.txHash || null;
+        payoutFailureReason = payoutResult.failureReason || payoutResult.message || null;
         message = `${questName} auto-approved, but treasury payout failed and needs review: ${payoutResult.message}`;
       } else if (isAutoRewardPayoutConfigured()) {
         message = `${questName} auto-approved. ${payoutResult.message}`;
@@ -421,6 +499,9 @@ Deno.serve(async (req) => {
       rewardAmountText: canonicalAmountText,
       whitelistAutoApproved: whitelistDecision.autoApprove,
       whitelistReason: whitelistDecision.reason,
+      payoutAttempted,
+      payoutAttemptId,
+      payoutFailureReason,
       testResetCycle: authorizedTestResetCycle || null,
       message,
       qualifyingRunMatchedOn: qualifyingRunLookup.matchedOn || 'completed_at',

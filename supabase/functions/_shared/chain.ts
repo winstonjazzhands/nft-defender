@@ -1,5 +1,5 @@
 import { createPublicClient, erc20Abi, getAddress, http, isAddressEqual, parseAbiItem } from "npm:viem@2.21.57";
-import { DFK_CHAIN_ID, DFK_HONK_TOKEN_ADDRESS, DFK_RPC_URL, TREASURY_ADDRESS, requireEnv } from "./env.ts";
+import { DFK_CHAIN_ID, DFK_HONK_TOKEN_ADDRESS, DFK_RPC_URL, RONIN_CHAIN_ID, RONIN_RPC_URL, RON_TREASURY_ADDRESS, TREASURY_ADDRESS, requireEnv } from "./env.ts";
 
 export function getDfkClient() {
   return createPublicClient({
@@ -13,18 +13,32 @@ export function getDfkClient() {
   });
 }
 
-export async function verifyNativeJewelTransferTx(
+function createNativeClient(chainId: number, name: string, symbol: string, rpcUrl: string) {
+  return createPublicClient({
+    chain: {
+      id: chainId,
+      name,
+      nativeCurrency: { name: symbol, symbol, decimals: 18 },
+      rpcUrls: { default: { http: [requireEnv(`${symbol}_RPC_URL`, rpcUrl)] } },
+    },
+    transport: http(rpcUrl),
+  });
+}
+
+async function verifyNativeTransferTx(
   txHash: `0x${string}`,
+  client: ReturnType<typeof createPublicClient>,
+  treasuryAddress: string,
+  assetLabel: string,
   expectedFrom?: string,
   expectedAmount?: bigint,
 ) {
-  const client = getDfkClient();
   const [tx, receipt] = await Promise.all([
     client.getTransaction({ hash: txHash }),
     client.getTransactionReceipt({ hash: txHash }),
   ]);
 
-  if (!tx.to || !isAddressEqual(tx.to, TREASURY_ADDRESS as `0x${string}`)) {
+  if (!tx.to || !isAddressEqual(tx.to, treasuryAddress as `0x${string}`)) {
     throw new Error("Transaction recipient does not match treasury.");
   }
 
@@ -43,7 +57,7 @@ export async function verifyNativeJewelTransferTx(
 
   const txInput = String(tx.input || "0x").toLowerCase();
   if (txInput !== "0x") {
-    throw new Error("Expected a native JEWEL transfer with empty calldata.");
+    throw new Error(`Expected a native ${assetLabel} transfer with empty calldata.`);
   }
 
   return {
@@ -53,6 +67,23 @@ export async function verifyNativeJewelTransferTx(
     blockNumber: Number(receipt.blockNumber),
     transactionHash: receipt.transactionHash,
   };
+}
+
+export async function verifyNativeJewelTransferTx(
+  txHash: `0x${string}`,
+  expectedFrom?: string,
+  expectedAmount?: bigint,
+) {
+  return verifyNativeTransferTx(txHash, getDfkClient(), TREASURY_ADDRESS, "JEWEL", expectedFrom, expectedAmount);
+}
+
+export async function verifyNativeRonTransferTx(
+  txHash: `0x${string}`,
+  expectedFrom?: string,
+  expectedAmount?: bigint,
+) {
+  const client = createNativeClient(RONIN_CHAIN_ID, "Ronin", "RON", requireEnv("RONIN_RPC_URL", RONIN_RPC_URL));
+  return verifyNativeTransferTx(txHash, client, RON_TREASURY_ADDRESS, "RON", expectedFrom, expectedAmount);
 }
 
 

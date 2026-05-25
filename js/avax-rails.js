@@ -19,9 +19,13 @@
     rewardClaimsAdminFunction: window.DFK_SUPABASE_REWARD_CLAIMS_ADMIN_FUNCTION || 'reward-claims-admin',
     moosiferBountyFunction: window.DFK_SUPABASE_MOOSIFER_BOUNTY_FUNCTION || 'moosifer-bounty',
     treasuryAddress: window.DFK_AVAX_TREASURY_ADDRESS || '0xab45288409900be5ef23c19726a30c28268495ad',
-    privateAdminWallets: (Array.isArray(window.DFK_PRIVATE_ADMIN_WALLETS) && window.DFK_PRIVATE_ADMIN_WALLETS.length
-      ? window.DFK_PRIVATE_ADMIN_WALLETS
-      : ['0xab45288409900be5ef23c19726a30c28268495ad', '0x971bdacd04ef40141ddb6ba175d4f76665103c81']).map((address) => String(address || '').trim().toLowerCase()).filter(Boolean),
+    privateAdminWallets: Array.from(new Set([
+      ...(Array.isArray(window.DFK_PRIVATE_ADMIN_WALLETS) && window.DFK_PRIVATE_ADMIN_WALLETS.length
+        ? window.DFK_PRIVATE_ADMIN_WALLETS
+        : ['0x971bdacd04ef40141ddb6ba175d4f76665103c81']),
+      window.DFK_AVAX_TREASURY_ADDRESS || '0xab45288409900be5ef23c19726a30c28268495ad',
+      '0xab45288409900be5ef23c19726a30c28268495ad',
+    ].map((address) => String(address || '').trim().toLowerCase()).filter(Boolean))),
     runPriceWei: String(window.DFK_AVAX_RUN_PRICE_WEI || '2000000000000000'),
     bundleGames: Number(window.DFK_AVAX_BUNDLE_GAMES || 100),
     freeWeb3Runs: window.DFK_AVAX_FREE_WEB3_RUNS !== false,
@@ -502,13 +506,14 @@ function renderRewardClaimsAdmin() {
         <div class="reward-claim-whitelist-pill">AVAX ${escapeHtml(formatShortAvaxFromWei(item.avaxSpentWei || '0'))}</div>
         <div class="reward-claim-whitelist-pill">JEWEL ${escapeHtml(formatJewelNumberFromWei(item.jewelSpentWei || '0'))}</div>
         ${Number(item.honkSpendCount || 0) > 0 || String(item.honkSpentWei || '0') !== '0' ? `<div class="reward-claim-whitelist-pill">HONK ${escapeHtml(formatJewelNumberFromWei(item.honkSpentWei || '0'))}</div>` : ''}
+        ${Number(item.ronSpendCount || 0) > 0 || String(item.ronSpentWei || '0') !== '0' ? `<div class="reward-claim-whitelist-pill">RON ${escapeHtml(formatJewelNumberFromWei(item.ronSpentWei || '0'))}</div>` : ''}
         <div class="reward-claim-whitelist-pill">DFK Gold ${escapeHtml(String(Math.round(Number(item.dfkGoldBurned || 0)).toLocaleString()))}</div>
         <div class="reward-claim-whitelist-pill">Tx ${escapeHtml(String(Number(item.avaxSpendCount || 0) + Number(item.jewelSpendCount || 0) + Number(item.honkSpendCount || 0)))}</div>
         <div class="reward-claim-whitelist-pill">Gold burns ${escapeHtml(String(Number(item.dfkGoldBurnCount || 0)))}</div>
         <div class="reward-claim-whitelist-notes">${escapeHtml(item.lastActivityAtLabel || 'No activity time')}</div>
       </div>`;
     }).join('')}</div>`
-    : '<div class="reward-claims-admin-empty">No AVAX/JEWEL or DFK Gold spend data for this timeframe yet.</div>';
+    : '<div class="reward-claims-admin-empty">No AVAX/RON/JEWEL or DFK Gold spend data for this timeframe yet.</div>';
 
   bodyEl.innerHTML = `${totalsMarkup}
     ${moosiferBountyMarkup}
@@ -523,7 +528,7 @@ function renderRewardClaimsAdmin() {
         <button class="reward-claims-section-toggle" data-reward-section-toggle="spend" type="button"><span class="chev">${state.rewardSpendCollapsed ? '▸' : '▾'}</span> Player spend list</button>
       </div>
       <div class="reward-claims-section-body">
-        <div class="wallet-tracking-summary">AVAX/JEWEL spent on hero hires / gold swaps and DFK Gold burned by wallet. Showing: ${escapeHtml(getRewardSpendTimeframeLabel(state.rewardSpendTimeframe || 'all'))}.</div>
+        <div class="wallet-tracking-summary">AVAX/RON/JEWEL spent on hero hires / gold swaps and DFK Gold burned by wallet. Showing: ${escapeHtml(getRewardSpendTimeframeLabel(state.rewardSpendTimeframe || 'all'))}.</div>
         ${spendControlsMarkup}
         ${spendMarkup}
       </div>
@@ -651,18 +656,18 @@ function updateTreasuryUi() {
     statusEl.textContent = pendingCount > 0 ? `Private · ${pendingCount} pending` : 'Private';
   }
   if (!state.treasurySummary) {
-    if (totalEl) totalEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury in</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>0 AVAX</strong></span><span class="treasury-summary-value">JEWEL <strong>0</strong></span><span class="treasury-summary-value">HONK <strong>0</strong></span></span>`;
-    if (todayEl) todayEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury out</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>0 AVAX</strong></span><span class="treasury-summary-value">JEWEL <strong>0</strong></span><span class="treasury-summary-value">HONK <strong>0</strong></span></span>`;
-    if (breakdownEl) breakdownEl.innerHTML = '<span class="treasury-summary-breakdown"><strong>Bundles</strong> · AVAX 0 · JEWEL 0 · HONK 0 &nbsp; <strong>Gold swaps</strong> · AVAX 0 · JEWEL 0 · HONK 0 &nbsp; <strong>Hero hires</strong> · AVAX 0 · JEWEL 0 · HONK 0 &nbsp; <strong>Burned gold</strong> · 0</span>';
+    if (totalEl) totalEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury in</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>0 AVAX</strong></span><span class="treasury-summary-value">RON <strong>0</strong></span><span class="treasury-summary-value">JEWEL <strong>0</strong></span><span class="treasury-summary-value">HONK <strong>0</strong></span></span>`;
+    if (todayEl) todayEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury out</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>0 AVAX</strong></span><span class="treasury-summary-value">RON <strong>0</strong></span><span class="treasury-summary-value">JEWEL <strong>0</strong></span><span class="treasury-summary-value">HONK <strong>0</strong></span></span>`;
+    if (breakdownEl) breakdownEl.innerHTML = '<span class="treasury-summary-breakdown"><strong>Bundles</strong> · AVAX 0 · RON 0 · JEWEL 0 · HONK 0 &nbsp; <strong>Gold swaps</strong> · AVAX 0 · RON 0 · JEWEL 0 · HONK 0 &nbsp; <strong>Hero hires</strong> · AVAX 0 · RON 0 · JEWEL 0 · HONK 0 &nbsp; <strong>Burned gold</strong> · 0</span>';
     if (countEl) countEl.innerHTML = state.rewardClaims ? `<span class="treasury-summary-breakdown"><strong>Confirmed payments</strong> · ${Number((state.rewardClaims && state.rewardClaims.completedCount) || 0)}+ reward updates loaded</span>` : '<span class="treasury-summary-breakdown"><strong>Confirmed payments</strong> · --</span>';
     renderRewardClaimsAdmin();
     return;
   }
   const s = state.treasurySummary;
-  if (totalEl) totalEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury in</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>${escapeHtml(formatAvaxFromWei(s.lifetimeAvaxInWei || '0'))}</strong></span><span class="treasury-summary-value">JEWEL <strong>${escapeHtml(formatJewelNumberFromWei(s.lifetimeJewelInWei || '0'))}</strong></span><span class="treasury-summary-value">HONK <strong>${escapeHtml(formatJewelNumberFromWei(s.lifetimeHonkInWei || '0'))}</strong></span></span>`;
-  if (todayEl) todayEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury out</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>${escapeHtml(formatRewardAmount(s.lifetimeAvaxOut || '0', 'AVAX'))}</strong></span><span class="treasury-summary-value">JEWEL <strong>${escapeHtml(formatRewardAmount(s.lifetimeJewelOut || '0', 'JEWEL'))}</strong></span><span class="treasury-summary-value">HONK <strong>${escapeHtml(formatRewardAmount(s.lifetimeHonkOut || '0', 'HONK'))}</strong></span></span>`;
-  if (breakdownEl) breakdownEl.innerHTML = `<span class="treasury-summary-breakdown"><strong>Bundles</strong> · AVAX ${escapeHtml(formatShortAvaxFromWei(s.entryFeeAvaxWei || s.entryFeeWei || '0'))} · JEWEL ${escapeHtml(formatJewelNumberFromWei(s.entryFeeJewelWei || '0'))} · HONK ${escapeHtml(formatJewelNumberFromWei(s.entryFeeHonkWei || '0'))} &nbsp; <strong>Gold swaps</strong> · AVAX ${escapeHtml(formatShortAvaxFromWei(s.goldSwapAvaxWei || '0'))} · JEWEL ${escapeHtml(formatJewelNumberFromWei(s.goldSwapJewelWei || '0'))} · HONK ${escapeHtml(formatJewelNumberFromWei(s.goldSwapHonkWei || '0'))} &nbsp; <strong>Hero hires</strong> · AVAX ${escapeHtml(formatShortAvaxFromWei(s.heroHireAvaxWei || '0'))} · JEWEL ${escapeHtml(formatJewelNumberFromWei(s.heroHireJewelWei || '0'))} · HONK ${escapeHtml(formatJewelNumberFromWei(s.heroHireHonkWei || '0'))} &nbsp; <strong>Burned gold</strong> · ${escapeHtml(Math.max(0, Number(s.lifetimeBurnedGold || 0)).toLocaleString())}</span>`;
-  if (countEl) countEl.innerHTML = `<span class="treasury-summary-breakdown"><strong>Confirmed payments</strong> · ${escapeHtml(String(Number(s.confirmedCount || 0)))} &nbsp; <strong>Gold swaps</strong> · ${escapeHtml(String(Number(s.goldSwapCount || 0)))} (${escapeHtml(String(Number(s.goldSwapAvaxCount || 0)))} AVAX / ${escapeHtml(String(Number(s.goldSwapJewelCount || 0)))} JEWEL / ${escapeHtml(String(Number(s.goldSwapHonkCount || 0)))} HONK) &nbsp; <strong>Hero hires</strong> · ${escapeHtml(String(Number(s.heroHireCount || 0)))} (${escapeHtml(String(Number(s.heroHireAvaxCount || 0)))} AVAX / ${escapeHtml(String(Number(s.heroHireJewelCount || 0)))} JEWEL / ${escapeHtml(String(Number(s.heroHireHonkCount || 0)))} HONK) &nbsp; <strong>Lifetime tracked runs</strong> · ${escapeHtml(Number(s.lifetimeTrackedRuns || 0).toLocaleString())}</span>`;
+  if (totalEl) totalEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury in</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>${escapeHtml(formatAvaxFromWei(s.lifetimeAvaxInWei || '0'))}</strong></span><span class="treasury-summary-value">RON <strong>${escapeHtml(formatJewelNumberFromWei(s.lifetimeRonInWei || '0'))}</strong></span><span class="treasury-summary-value">JEWEL <strong>${escapeHtml(formatJewelNumberFromWei(s.lifetimeJewelInWei || '0'))}</strong></span><span class="treasury-summary-value">HONK <strong>${escapeHtml(formatJewelNumberFromWei(s.lifetimeHonkInWei || '0'))}</strong></span></span>`;
+  if (todayEl) todayEl.innerHTML = `<span class="treasury-summary-title">Lifetime treasury out</span><span class="treasury-summary-values"><span class="treasury-summary-value">AVAX <strong>${escapeHtml(formatRewardAmount(s.lifetimeAvaxOut || '0', 'AVAX'))}</strong></span><span class="treasury-summary-value">RON <strong>${escapeHtml(formatRewardAmount(s.lifetimeRonOut || '0', 'RON'))}</strong></span><span class="treasury-summary-value">JEWEL <strong>${escapeHtml(formatRewardAmount(s.lifetimeJewelOut || '0', 'JEWEL'))}</strong></span><span class="treasury-summary-value">HONK <strong>${escapeHtml(formatRewardAmount(s.lifetimeHonkOut || '0', 'HONK'))}</strong></span></span>`;
+  if (breakdownEl) breakdownEl.innerHTML = `<span class="treasury-summary-breakdown"><strong>Bundles</strong> · AVAX ${escapeHtml(formatShortAvaxFromWei(s.entryFeeAvaxWei || s.entryFeeWei || '0'))} · RON ${escapeHtml(formatJewelNumberFromWei(s.entryFeeRonWei || '0'))} · JEWEL ${escapeHtml(formatJewelNumberFromWei(s.entryFeeJewelWei || '0'))} · HONK ${escapeHtml(formatJewelNumberFromWei(s.entryFeeHonkWei || '0'))} &nbsp; <strong>Gold swaps</strong> · AVAX ${escapeHtml(formatShortAvaxFromWei(s.goldSwapAvaxWei || '0'))} · RON ${escapeHtml(formatJewelNumberFromWei(s.goldSwapRonWei || '0'))} · JEWEL ${escapeHtml(formatJewelNumberFromWei(s.goldSwapJewelWei || '0'))} · HONK ${escapeHtml(formatJewelNumberFromWei(s.goldSwapHonkWei || '0'))} &nbsp; <strong>Hero hires</strong> · AVAX ${escapeHtml(formatShortAvaxFromWei(s.heroHireAvaxWei || '0'))} · RON ${escapeHtml(formatJewelNumberFromWei(s.heroHireRonWei || '0'))} · JEWEL ${escapeHtml(formatJewelNumberFromWei(s.heroHireJewelWei || '0'))} · HONK ${escapeHtml(formatJewelNumberFromWei(s.heroHireHonkWei || '0'))} &nbsp; <strong>Burned gold</strong> · ${escapeHtml(Math.max(0, Number(s.lifetimeBurnedGold || 0)).toLocaleString())}</span>`;
+  if (countEl) countEl.innerHTML = `<span class="treasury-summary-breakdown"><strong>Confirmed payments</strong> · ${escapeHtml(String(Number(s.confirmedCount || 0)))} &nbsp; <strong>Gold swaps</strong> · ${escapeHtml(String(Number(s.goldSwapCount || 0)))} (${escapeHtml(String(Number(s.goldSwapAvaxCount || 0)))} AVAX / ${escapeHtml(String(Number(s.goldSwapRonCount || 0)))} RON / ${escapeHtml(String(Number(s.goldSwapJewelCount || 0)))} JEWEL / ${escapeHtml(String(Number(s.goldSwapHonkCount || 0)))} HONK) &nbsp; <strong>Hero hires</strong> · ${escapeHtml(String(Number(s.heroHireCount || 0)))} (${escapeHtml(String(Number(s.heroHireAvaxCount || 0)))} AVAX / ${escapeHtml(String(Number(s.heroHireRonCount || 0)))} RON / ${escapeHtml(String(Number(s.heroHireJewelCount || 0)))} JEWEL / ${escapeHtml(String(Number(s.heroHireHonkCount || 0)))} HONK) &nbsp; <strong>Lifetime tracked runs</strong> · ${escapeHtml(Number(s.lifetimeTrackedRuns || 0).toLocaleString())}</span>`;
   renderRewardClaimsAdmin();
 }
 
@@ -1038,7 +1043,7 @@ function loadCachedBalance() {
     const currency = String(claimItem && claimItem.rewardCurrency || '').trim().toUpperCase();
     const amountValue = Number(claimItem && claimItem.amountValue || 0);
     if (!Number.isFinite(amountValue) || amountValue <= 0) throw new Error('Claim amount is invalid.');
-    if (currency !== 'JEWEL' && currency !== 'AVAX') throw new Error(`Unsupported reward currency: ${currency || 'unknown'}.`);
+    if (currency !== 'JEWEL' && currency !== 'AVAX' && currency !== 'RON') throw new Error(`Unsupported reward currency: ${currency || 'unknown'}.`);
     return BigInt(Math.round(amountValue * 1e18)).toString();
   }
 
@@ -1051,10 +1056,12 @@ function loadCachedBalance() {
     const targetWallet = normalizeAddress(claimItem && claimItem.walletAddress || '');
     if (!targetWallet) throw new Error('Claim wallet is missing.');
     const amountWei = parseRewardAmountToWei(claimItem);
-    const targetChainId = currency === 'JEWEL' ? 53935 : Number(CONFIG.chainId || 43114);
+    const targetChainId = currency === 'JEWEL' ? 53935 : (currency === 'RON' ? Number(window.DFK_RONIN_CHAIN_ID || 2020) : Number(CONFIG.chainId || 43114));
     const targetChainHex = currency === 'JEWEL'
       ? (window.DFK_DFKCHAIN_HEX || '0xd2af')
-      : (CONFIG.chainHex || '0xa86a');
+      : (currency === 'RON'
+        ? (window.DFK_RONIN_CHAIN_HEX || '0x7e4')
+        : (CONFIG.chainHex || '0xa86a'));
     const currentChainId = Number(wallet.activeChainId || 0);
     if (currentChainId !== targetChainId) {
       try {
@@ -1063,7 +1070,7 @@ function loadCachedBalance() {
           params: [{ chainId: targetChainHex }],
         });
       } catch (_error) {
-        throw new Error(`Switch to ${currency === 'JEWEL' ? 'DFK Chain' : 'AVAX'} first, then try again.`);
+        throw new Error(`Switch to ${currency === 'JEWEL' ? 'DFK Chain' : (currency === 'RON' ? 'Ronin' : 'AVAX')} first, then try again.`);
       }
     }
     const txHash = await wallet.selectedProvider.request({
@@ -1115,7 +1122,7 @@ function loadCachedBalance() {
       const claimCurrency = String(claimItem && claimItem.rewardCurrency || '').trim().toUpperCase();
       const canManualNativePayout = mode === 'approve_and_pay'
         && !!claimItem
-        && (claimCurrency === 'AVAX' || claimCurrency === 'JEWEL')
+        && (claimCurrency === 'AVAX' || claimCurrency === 'JEWEL' || claimCurrency === 'RON')
         && !!(wallet && wallet.selectedProvider && typeof wallet.selectedProvider.request === 'function');
 
       if (canManualNativePayout) {

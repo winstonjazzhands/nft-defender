@@ -24,6 +24,16 @@
     nativeCurrency: { name: 'AVAX', symbol: 'AVAX', decimals: 18 },
   });
 
+  const RONIN_CONFIG = Object.freeze({
+    key: 'ronin',
+    chainId: Number(window.DFK_RONIN_CHAIN_ID || 2020),
+    chainHex: window.DFK_RONIN_CHAIN_HEX || '0x7e4',
+    chainName: window.DFK_RONIN_CHAIN_NAME || 'Ronin',
+    rpcUrls: [window.DFK_RONIN_RPC_URL || 'https://api.roninchain.com/rpc'],
+    blockExplorerUrls: [window.DFK_RONIN_EXPLORER_URL || 'https://app.roninchain.com'],
+    nativeCurrency: { name: 'RON', symbol: 'RON', decimals: 18 },
+  });
+
   const CONFIG = Object.freeze({
     ...DFK_CONFIG,
     supabaseUrl: window.DFK_SUPABASE_URL || (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || '',
@@ -31,7 +41,7 @@
     resolveProfileFunction: window.DFK_SUPABASE_RESOLVE_PROFILE_FUNCTION || 'resolve-profile-name',
   });
 
-  const SUPPORTED_CHAINS = Object.freeze([DFK_CONFIG, AVAX_CONFIG]);
+  const SUPPORTED_CHAINS = Object.freeze([DFK_CONFIG, AVAX_CONFIG, RONIN_CONFIG]);
 
   const CONTRACTS = Object.freeze({
     dfkProfiles: '0xC4cD8C09D1A90b21Be417be91A81603B03993E81',
@@ -500,7 +510,39 @@
       applyActiveChainConfig(supported);
       return true;
     }
-    throw new Error('Switch your wallet to DFK Chain or Avalanche C-Chain and try again.');
+    throw new Error('Switch your wallet to DFK Chain, Avalanche C-Chain, or Ronin and try again.');
+  }
+
+  function getSupportedChainConfigByKey(key) {
+    const normalized = String(key || '').trim().toLowerCase();
+    if (!normalized) return null;
+    return SUPPORTED_CHAINS.find((entry) => entry.key === normalized || String(entry.chainId) === normalized || String(entry.chainHex || '').toLowerCase() === normalized) || null;
+  }
+
+  async function switchChain(chainKey) {
+    const provider = state.selectedProvider || chooseProvider();
+    if (!provider) throw new Error('Connect a wallet first.');
+    const chain = getSupportedChainConfigByKey(chainKey);
+    if (!chain) throw new Error('Unsupported chain.');
+    try {
+      await request(provider, 'wallet_switchEthereumChain', [{ chainId: chain.chainHex }]);
+    } catch (error) {
+      const code = Number(error && error.code);
+      if (code !== 4902) throw error;
+      await request(provider, 'wallet_addEthereumChain', [{
+        chainId: chain.chainHex,
+        chainName: chain.chainName,
+        nativeCurrency: chain.nativeCurrency,
+        rpcUrls: chain.rpcUrls,
+        blockExplorerUrls: chain.blockExplorerUrls,
+      }]);
+    }
+    state.selectedProvider = provider;
+    applyActiveChainConfig(chain);
+    await refreshWalletDetails().catch(() => null);
+    render();
+    emitWalletState();
+    return { chainId: chain.chainId, chainName: chain.chainName };
   }
 
 
@@ -707,6 +749,7 @@
     refreshWalletDetails,
     depositJewel,
     disconnectWallet,
+    switchChain,
     transferHeroes,
     getProvider: () => state.selectedProvider,
     getState: () => ({ ...state }),

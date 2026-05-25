@@ -86,8 +86,10 @@ type BountyDef = {
   difficultyLabel?: string;
   selectionWeight?: number;
   rewardAvax?: number;
+  rewardRon?: number;
   rewardJewel?: number;
   rewardAvaxText?: string;
+  rewardRonText?: string;
   rewardJewelText?: string;
   rewardPairText?: string;
   reward?: string;
@@ -101,7 +103,9 @@ function buildBounty(entry: BountyDef): BountyDef {
   const difficulty = BOUNTY_DIFFICULTY[entry.difficulty] || BOUNTY_DIFFICULTY.medium;
   const rewardAvax = Number(difficulty.rewardAvax || 0) || 0;
   const rewardJewel = Math.max(0, Number(difficulty.rewardJewel || 0) || 0);
+  const rewardRon = Math.max(0, rewardJewel * 0.08);
   const rewardAvaxText = `${formatRewardValue(rewardAvax)} AVAX`;
+  const rewardRonText = `${formatRewardValue(rewardRon)} RON`;
   const rewardJewelText = `${formatRewardValue(rewardJewel)} JEWEL`;
   return {
     ...entry,
@@ -109,12 +113,14 @@ function buildBounty(entry: BountyDef): BountyDef {
     difficultyLabel: difficulty.label,
     selectionWeight: Number(entry.selectionWeight || difficulty.selectionWeight || 1) || 1,
     rewardAvax,
+    rewardRon,
     rewardJewel,
     rewardAvaxText,
+    rewardRonText,
     rewardJewelText,
-    rewardPairText: `${rewardAvaxText} or ${rewardJewelText}`,
-    reward: `${rewardAvaxText} or ${rewardJewelText}`,
-    rewardText: `${rewardAvaxText} or ${rewardJewelText}`,
+    rewardPairText: `${rewardAvaxText}, ${rewardRonText}, or ${rewardJewelText}`,
+    reward: `${rewardAvaxText}, ${rewardRonText}, or ${rewardJewelText}`,
+    rewardText: `${rewardAvaxText}, ${rewardRonText}, or ${rewardJewelText}`,
     claimLimit: Math.max(1, Number(entry.claimLimit || 3) || 3),
     isMultiWave: !!entry.isMultiWave,
   };
@@ -154,9 +160,9 @@ const BOUNTY_POOL: BountyDef[] = [
     buildBounty({ id: 'support_heal_150k', title: 'Heal 150,000 total HP with support heroes', detail: 'Restore 150,000 total HP with support heroes.', metric: 'supportHealing', metricLabel: 'Support healing', category: 'hero', categoryLabel: 'Hero Usage / Performance', goal: 150000, difficulty: 'medium' }),
     buildBounty({ id: 'manual_trigger_1400_abilities', title: 'Manually trigger hero abilities 1,400 times', detail: 'Manually trigger 1,400 hero abilities this week.', metric: 'manualHeroAbilityTriggers', metricLabel: 'Manual abilities triggered', category: 'hero', categoryLabel: 'Hero Usage / Performance', goal: 1400, difficulty: 'medium' }),
     buildBounty({ id: 'hero_alive_300_waves', title: 'Keep a hero alive for 300 waves total', detail: 'Stack up 300 hero-alive wave counts.', metric: 'heroAliveWaves', metricLabel: 'Hero-alive waves', category: 'hero', categoryLabel: 'Hero Usage / Performance', goal: 300, difficulty: 'medium' }),
-    buildBounty({ id: 'complete_550_past_20', title: 'Complete 550 waves past wave 20', detail: 'Finish 550 waves numbered 21 or higher.', metric: 'wavesPast20', metricLabel: 'Waves beyond 20', category: 'progression', categoryLabel: 'Wave / Progression', goal: 550, difficulty: 'medium' }),
-    buildBounty({ id: 'complete_350_threewave', title: 'Complete 350 waves during 3-wave pressure', detail: 'Complete 350 waves with three live waves.', metric: 'wavesMulti3', metricLabel: '3-wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 3000, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.2 }),
-    buildBounty({ id: 'complete_750_multiwave', title: 'Complete 750 waves during multi-wave (2+)', detail: 'Complete 750 waves while 2+ live waves are active.', metric: 'wavesMulti2', metricLabel: '2+ wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 750, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.25 }),
+    buildBounty({ id: 'complete_550_past_20', title: 'Complete 105 waves past wave 20', detail: 'Finish 105 waves numbered 21 or higher.', metric: 'wavesPast20', metricLabel: 'Waves beyond 20', category: 'progression', categoryLabel: 'Wave / Progression', goal: 105, difficulty: 'medium' }),
+    buildBounty({ id: 'complete_350_threewave', title: 'Complete 110 waves during 3-wave pressure', detail: 'Complete 110 waves with three live waves.', metric: 'wavesMulti3', metricLabel: '3-wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 110, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.2 }),
+    buildBounty({ id: 'complete_750_multiwave', title: 'Complete 115 waves during multi-wave (2+)', detail: 'Complete 115 waves while 2+ live waves are active.', metric: 'wavesMulti2', metricLabel: '2+ wave clears', category: 'progression', categoryLabel: 'Wave / Progression', goal: 115, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.25 }),
     buildBounty({ id: 'defeat_4500_threewave', title: 'Defeat 4,500 enemies during 3-wave pressure', detail: 'Defeat 4,500 enemies while three live waves are active.', metric: 'killsMulti3', metricLabel: '3-wave kills', category: 'combat', categoryLabel: 'Combat / Kill-Based', goal: 4500, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.2 }),
     buildBounty({ id: 'trigger_1500_multiwave_bonus', title: 'Trigger multi-wave bonus 1,500 times', detail: 'Trigger the multi-wave bonus 1,500 times this week.', metric: 'multiWaveBonusTriggers', metricLabel: 'Bonus triggers', category: 'progression', categoryLabel: 'Wave / Progression', goal: 1500, difficulty: 'medium', isMultiWave: true, selectionWeight: 1.3 }),
     buildBounty({ id: 'spend_200k_gold', title: 'Spend 200,000 gold', detail: 'Spend 200,000 gold this week.', metric: 'goldSpent', metricLabel: 'Gold spent', category: 'economy', categoryLabel: 'Economy / Activity', goal: 200000, difficulty: 'medium' }),
@@ -164,9 +170,9 @@ const BOUNTY_POOL: BountyDef[] = [
     buildBounty({ id: 'hire_10_heroes', title: 'Hire 10 heroes', detail: 'Hire 10 heroes this week.', metric: 'heroesHired', metricLabel: 'Heroes hired', category: 'economy', categoryLabel: 'Economy / Activity', goal: 10, difficulty: 'medium' }),
     buildBounty({ id: 'open_150_relic_choices', title: 'Open 150 relic choices', detail: 'Open 150 relic choice windows this week.', metric: 'relicChoicesOpened', metricLabel: 'Relic choices opened', category: 'economy', categoryLabel: 'Economy / Activity', goal: 150, difficulty: 'medium' }),
   buildBounty({ id: 'defeat_75_bosses', title: 'Defeat 75 boss enemies', detail: 'Defeat 75 boss enemies this week.', metric: 'killsBoss', metricLabel: 'Bosses defeated', category: 'combat', categoryLabel: 'Combat / Kill-Based', goal: 75, difficulty: 'heavy' }),
-  buildBounty({ id: 'complete_150_past_30', title: 'Complete 150 waves past wave 30', detail: 'Finish 150 waves numbered 31 or higher.', metric: 'wavesPast30', metricLabel: 'Waves beyond 30', category: 'progression', categoryLabel: 'Wave / Progression', goal: 150, difficulty: 'heavy' }),
-  buildBounty({ id: 'complete_1100_waves', title: 'Complete 1,100 waves', detail: 'Finish 1,100 waves this week.', metric: 'wavesCompleted', metricLabel: 'Waves completed', category: 'progression', categoryLabel: 'Wave / Progression', goal: 1100, difficulty: 'heavy' }),
-  buildBounty({ id: 'start_1100_waves', title: 'Start 1,100 waves', detail: 'Start 1,100 waves this week.', metric: 'wavesStarted', metricLabel: 'Waves started', category: 'progression', categoryLabel: 'Wave / Progression', goal: 1100, difficulty: 'heavy' }),
+  buildBounty({ id: 'complete_150_past_30', title: 'Complete 95 waves past wave 30', detail: 'Finish 95 waves numbered 31 or higher.', metric: 'wavesPast30', metricLabel: 'Waves beyond 30', category: 'progression', categoryLabel: 'Wave / Progression', goal: 95, difficulty: 'heavy' }),
+  buildBounty({ id: 'complete_1100_waves', title: 'Complete 125 waves', detail: 'Finish 125 waves this week.', metric: 'wavesCompleted', metricLabel: 'Waves completed', category: 'progression', categoryLabel: 'Wave / Progression', goal: 125, difficulty: 'heavy' }),
+  buildBounty({ id: 'start_1100_waves', title: 'Start 125 waves', detail: 'Start 125 waves this week.', metric: 'wavesStarted', metricLabel: 'Waves started', category: 'progression', categoryLabel: 'Wave / Progression', goal: 125, difficulty: 'heavy' }),
   buildBounty({ id: 'trigger_300_multiwave_bonus', title: 'Trigger multi-wave bonus 300 times', detail: 'Trigger the multi-wave bonus 300 times this week.', metric: 'multiWaveBonusTriggers', metricLabel: 'Bonus triggers', category: 'progression', categoryLabel: 'Wave / Progression', goal: 300, difficulty: 'heavy', isMultiWave: true, selectionWeight: 1.2 }),
 ];
 
@@ -657,7 +663,7 @@ Deno.serve(async (req) => {
       return json({ error: 'Wallet mismatch.' }, 401);
     }
     if (!bountyId) return json({ error: 'Missing bounty id.' }, 400);
-    if (!['AVAX', 'JEWEL'].includes(rewardCurrency)) return json({ error: 'Choose AVAX or JEWEL before claiming.' }, 400);
+    if (!['AVAX', 'RON', 'JEWEL'].includes(rewardCurrency)) return json({ error: 'Choose AVAX, RON, or JEWEL before claiming.' }, 400);
 
     const weekKey = weekKeyFromDate(new Date());
     const active = buildActiveBounties(weekKey, walletAddress);
@@ -706,11 +712,11 @@ Deno.serve(async (req) => {
     const claimDay = now.toISOString().slice(0, 10);
     const amountValue = rewardCurrency === 'JEWEL'
       ? (Math.max(0, Number(bounty.rewardJewel || 0) || 0))
-      : (Number(bounty.rewardAvax || 0) || 0);
+      : (rewardCurrency === 'RON'
+        ? (Math.max(0, Number(bounty.rewardRon || 0) || 0))
+        : (Number(bounty.rewardAvax || 0) || 0));
     if (amountValue <= 0) return json({ error: `This bounty does not have a valid ${rewardCurrency} reward configured.` }, 500);
-    const rewardText = rewardCurrency === 'JEWEL'
-      ? `${formatRewardValue(amountValue)} JEWEL`
-      : `${formatRewardValue(amountValue)} AVAX`;
+    const rewardText = `${formatRewardValue(amountValue)} ${rewardCurrency}`;
     const requestCurrency = rewardCurrency;
     const requestKey = `weekly_bounty:${weekKey}:${bountyId}:${walletAddress}`;
 

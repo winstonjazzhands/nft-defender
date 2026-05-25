@@ -8,6 +8,9 @@ export const DFK_JEWEL_PAYMENT_ASSET = Deno.env.get("DFK_JEWEL_PAYMENT_ASSET") |
 export const AVAX_CHAIN_ID = Number(Deno.env.get("AVAX_CHAIN_ID") || "43114");
 export const AVAX_RPC_URL = Deno.env.get("AVAX_RPC_URL") || "https://api.avax.network/ext/bc/C/rpc";
 export const AVAX_TREASURY_ADDRESS = (Deno.env.get("DFK_AVAX_TREASURY_ADDRESS") || Deno.env.get("AVAX_TREASURY_ADDRESS") || TREASURY_ADDRESS).trim().toLowerCase();
+export const RONIN_CHAIN_ID = Number(Deno.env.get("RONIN_CHAIN_ID") || Deno.env.get("DFK_RONIN_CHAIN_ID") || "2020");
+export const RONIN_RPC_URL = Deno.env.get("RONIN_RPC_URL") || Deno.env.get("DFK_RONIN_RPC_URL") || "https://api.roninchain.com/rpc";
+export const RON_TREASURY_ADDRESS = (Deno.env.get("DFK_RON_TREASURY_ADDRESS") || Deno.env.get("RON_TREASURY_ADDRESS") || TREASURY_ADDRESS).trim().toLowerCase();
 const RAW_TREASURY_PRIVATE_KEY = Deno.env.get("TREASURY_PRIVATE_KEY") || Deno.env.get("DFK_TREASURY_PRIVATE_KEY") || "";
 
 export function normalizePrivateKey(value: string | null | undefined) {
