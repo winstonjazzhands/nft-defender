@@ -1143,6 +1143,26 @@ function attachSecureSubmission(queueId, secureSubmission) {
     return Number.isFinite(ms) ? new Date(ms).toISOString() : '';
   }
 
+  const MAX_TRACKED_RUN_SESSION_MS = 23 * 60 * 60_000;
+
+  function normalizeRunStartedAtForSubmission(runStartedAt, completedAt, wavesCleared) {
+    const completedMs = new Date(completedAt).getTime();
+    const startedMs = new Date(runStartedAt || '').getTime();
+    if (!Number.isFinite(completedMs)) return runStartedAt || '';
+    const safeWaves = Math.max(0, Math.floor(Number(wavesCleared || 0)));
+    const approxDurationMs = Math.min(60 * 60 * 1000, Math.max(30 * 1000, Math.max(safeWaves, 1) * 5 * 1000));
+    const minValidationMs = safeWaves <= 25 ? 0 : Math.max(0, (safeWaves - 5) * 4_000 + 60_000);
+    const fallbackDurationMs = Math.min(MAX_TRACKED_RUN_SESSION_MS, Math.max(approxDurationMs, minValidationMs));
+    if (!Number.isFinite(startedMs) || startedMs > completedMs) {
+      return new Date(completedMs - fallbackDurationMs).toISOString();
+    }
+    const durationMs = completedMs - startedMs;
+    if (durationMs > MAX_TRACKED_RUN_SESSION_MS) {
+      return new Date(completedMs - fallbackDurationMs).toISOString();
+    }
+    return new Date(startedMs).toISOString();
+  }
+
   function makeRunClientId(seed) {
     const base = String(seed || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1158,7 +1178,8 @@ function attachSecureSubmission(queueId, secureSubmission) {
     const waveReachedRaw = Number.isFinite(Number(source.waveReached)) ? Math.floor(Number(source.waveReached)) : wavesCleared;
     const waveReached = Math.max(wavesCleared, Math.max(0, waveReachedRaw));
     const approxDurationMs = Math.min(60 * 60 * 1000, Math.max(30 * 1000, Math.max(wavesCleared, 1) * 5 * 1000));
-    const runStartedAt = coerceIsoDate(source.runStartedAt) || new Date(new Date(completedAt).getTime() - approxDurationMs).toISOString();
+    const rawRunStartedAt = coerceIsoDate(source.runStartedAt) || new Date(new Date(completedAt).getTime() - approxDurationMs).toISOString();
+    const runStartedAt = normalizeRunStartedAtForSubmission(rawRunStartedAt, completedAt, wavesCleared);
     const mode = source.mode === 'challenge' ? 'challenge' : 'easy';
     const result = source.result === 'win' ? 'win' : 'loss';
     const rawStats = source.stats && typeof source.stats === 'object' ? { ...source.stats } : {};
@@ -1263,7 +1284,7 @@ async function requestSecureRunSignature(queueItem, walletAddress) {
   function isRepairableRunPayloadError(error) {
     const status = Number(error && error.status || 0);
     const code = String(error && error.code || '').trim().toLowerCase();
-    return status === 400 && /invalid_|wallet_required|client_run_id_required|invalid_body|invalid_game_version|invalid_chain_id|invalid_mode|invalid_result|invalid_completed_at|invalid_run_started_at|invalid_wave_reached|invalid_waves_cleared|invalid_portal_hp_left|invalid_gold_on_hand|invalid_premium_jewels|invalid_heroes_payload|invalid_hero_|invalid_total_hero_count|invalid_hire_count|invalid_barrier_stats|invalid_dfk_gold_burned_total|run_duration_too_short/.test(code);
+    return status === 400 && /invalid_|wallet_required|client_run_id_required|invalid_body|invalid_game_version|invalid_chain_id|invalid_mode|invalid_result|invalid_completed_at|invalid_run_started_at|invalid_wave_reached|invalid_waves_cleared|invalid_portal_hp_left|invalid_gold_on_hand|invalid_premium_jewels|invalid_heroes_payload|invalid_hero_|invalid_total_hero_count|invalid_hire_count|invalid_barrier_stats|invalid_dfk_gold_burned_total|run_duration_too_short|run_duration_too_long/.test(code);
   }
 
   function isLegacyQueuedRun(queueItem) {

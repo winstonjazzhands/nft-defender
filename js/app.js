@@ -529,7 +529,7 @@ window.addEventListener('load', () => {
 });
 
 
-const treeVariants = ["tree1.png","tree2.png","tree3.png"];
+const treeVariants = ["rootwall.png"];
 function getRandomTree(){
   return treeVariants[Math.floor(Math.random()*treeVariants.length)];
 }
@@ -741,6 +741,13 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
   const BERSERKER_WANDER_MIN_WAVES = 14;
   const BERSERKER_WANDER_MAX_WAVES = 20;
   const BERSERKER_WANDER_DURATION_WAVES = 7;
+  const THIEF_VANISH_INTERVAL_WAVES = 7;
+  const THIEF_VANISH_DURATION_WAVES = 3;
+  const THIEF_SHADOW_ARC_MAX_TARGETS = 15;
+  const THIEF_SHADOW_ARC_DAMAGE_MULTIPLIER = 0.28;
+  const THIEF_SHADOW_ARC_CONFUSE_CHANCE = 0.10;
+  const THIEF_SHADOW_ARC_CONFUSE_DURATION_SECONDS = 5;
+  const THIEF_BACK_STAB_GOLD_PER_WAVE = 0.9;
   const GEN0_WALLET_HERO_DAMAGE_MULTIPLIER = 1.20;
   const GEN0_WALLET_HERO_SPEED_MULTIPLIER = 1.10;
   const GEN0_WALLET_HERO_HP_MULTIPLIER = 1.10;
@@ -874,6 +881,22 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
       ],
       passive: '',
     },
+    thief: {
+      name: 'Thief',
+      letter: 'THF',
+      hp: 260 / NON_WARRIOR_HERO_HP_MULTIPLIER / NON_WARRIOR_BASE_HP_MULTIPLIER,
+      damage: 22 / GLOBAL_HERO_DAMAGE_MULTIPLIER,
+      attackInterval: 0.82,
+      range: 1,
+      autoAttack: true,
+      abilities: [
+        { key: 'twin_fang', name: 'Twin Fang', cooldown: 0, passive: true },
+        { key: 'back_stab', name: 'Back Stab', cooldown: 0, passive: true },
+        { key: 'shadow_arc', name: 'Shadow Arc', cooldown: 10 },
+        { key: 'vanish', name: 'Vanish', cooldown: 0, passive: true },
+      ],
+      passive: '',
+    },
     champion_dreadknight: {
       name: 'Dreadknight', letter: 'DK', hp: 2400, damage: 120, attackInterval: 1.0, range: 1, autoAttack: true,
       abilities: [
@@ -916,7 +939,7 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     if (template && Number(template.damage || 0) > 0) template.damage *= GLOBAL_HERO_DAMAGE_MULTIPLIER;
   });
 
-  ['archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker'].forEach((heroKey) => {
+  ['archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker', 'thief'].forEach((heroKey) => {
     const template = TOWER_TEMPLATES[heroKey];
     if (!template) return;
     template.hp = Math.max(1, Math.round(Number(template.hp || 0) * NON_WARRIOR_HERO_HP_MULTIPLIER));
@@ -1506,6 +1529,8 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     globalDfkGoldRefreshTimer: null,
     milestoneHeroOffer: null,
     milestoneHeroOffersSeen: {},
+    pendingPostRelicMilestoneHeroOffer: null,
+    pendingPostRelicMilestoneBarrierOffer: null,
     lastHeroPlacementReminderWave: 0,
     warriorPlacedThisRun: false,
     pendingMilestoneHeroPlacement: null,
@@ -1642,6 +1667,7 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     d20RollsApplied: {},
     d20TemporaryBuffs: [],
     d20GuardianWardUntilWave: 0,
+    d20FreeRelicPending: false,
     nextHeroHireHalfPrice: false,
     bountyBoard: {
       loading: false,
@@ -1705,7 +1731,7 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
   }
 
   function isRelicFree(relic, isFreeStartingRelic = false) {
-    return !!isFreeStartingRelic || (relic?.rarity === 'mythic');
+    return !!isFreeStartingRelic || !!game.d20FreeRelicPending || (relic?.rarity === 'mythic');
   }
 
   function getRelicCostLabel(relic, isFreeStartingRelic = false) {
@@ -3803,7 +3829,7 @@ function formatQuestResetCountdown(dateKey) {
       && tower.hp > 0
       && !tower.isSatellite
       && !tower.isChampion
-      && ['warrior', 'archer', 'wizard', 'priest', 'seer', 'pirate', 'monk', 'berserker'].includes(String(tower.type || ''))).length;
+      && ['warrior', 'archer', 'wizard', 'priest', 'seer', 'pirate', 'monk', 'berserker', 'thief'].includes(String(tower.type || ''))).length;
   }
 
   function hasUsableWalletHeroRoster() {
@@ -5075,16 +5101,18 @@ function formatQuestResetCountdown(dateKey) {
     const connectedChainId = Number(getConnectedWalletChainId() || 0);
     const resolvedChainId = Number(paymentSummary.chainId || connectedChainId || window.DFK_AVAX_CHAIN_ID || 43114);
     const bountyDelta = buildRunWeeklyBountyMetricDelta();
+    const completedAt = new Date().toISOString();
+    const wavesCleared = Number(game.waveNumber || 0);
     const payload = {
       clientRunId: game.runTracking.clientRunId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-      runStartedAt: game.runTracking.startedAt || new Date().toISOString(),
-      completedAt: new Date().toISOString(),
+      runStartedAt: normalizeRunStartedAtForSubmission(game.runTracking.startedAt || completedAt, completedAt, wavesCleared),
+      completedAt,
       gameVersion: CURRENT_RUN_BUILD,
       mode: game.mobileMode ? 'easy' : 'challenge',
       result,
       chainId: resolvedChainId,
-      waveReached: Number(game.waveNumber || 0),
-      wavesCleared: Number(game.waveNumber || 0),
+      waveReached: wavesCleared,
+      wavesCleared,
       portalHpLeft: Math.max(0, Math.round(Number(game.portalHp || 0))),
       goldOnHand: Math.max(0, Math.round(Number(game.jewel || 0))),
       premiumJewels: Math.max(0, Math.round(Number(game.premiumJewels || 0))),
@@ -5127,6 +5155,22 @@ function formatQuestResetCountdown(dateKey) {
 
   function getHighValueRunSessionPromptKey(payload) {
     return String((payload && payload.clientRunId) || (game.runTracking && game.runTracking.clientRunId) || '');
+  }
+
+  const MAX_TRACKED_RUN_SESSION_MS = 23 * 60 * 60_000;
+
+  function normalizeRunStartedAtForSubmission(runStartedAt, completedAt, wavesCleared) {
+    const completedMs = new Date(completedAt).getTime();
+    const startedMs = new Date(runStartedAt || '').getTime();
+    if (!Number.isFinite(completedMs)) return runStartedAt || '';
+    const safeWaves = Math.max(0, Math.floor(Number(wavesCleared || 0)));
+    const approxDurationMs = Math.min(60 * 60 * 1000, Math.max(30 * 1000, Math.max(safeWaves, 1) * 5 * 1000));
+    const minValidationMs = safeWaves <= 25 ? 0 : Math.max(0, (safeWaves - 5) * 4_000 + 60_000);
+    const fallbackDurationMs = Math.min(MAX_TRACKED_RUN_SESSION_MS, Math.max(approxDurationMs, minValidationMs));
+    if (!Number.isFinite(startedMs) || startedMs > completedMs || completedMs - startedMs > MAX_TRACKED_RUN_SESSION_MS) {
+      return new Date(completedMs - fallbackDurationMs).toISOString();
+    }
+    return new Date(startedMs).toISOString();
   }
 
   async function connectForHighValueRunSessionPrompt(connectBtn, statusEl) {
@@ -6547,6 +6591,45 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     return !!(game.milestoneHeroOffer || game.milestoneBarrierOffer);
   }
 
+  function hasPendingPostRelicMilestoneOffer() {
+    return !!(game.pendingPostRelicMilestoneHeroOffer || game.pendingPostRelicMilestoneBarrierOffer);
+  }
+
+  function deferMilestoneOffersUntilAfterRelic(heroOfferConfig = null, barrierOfferConfig = null) {
+    if (heroOfferConfig) game.pendingPostRelicMilestoneHeroOffer = cloneContinueData(heroOfferConfig);
+    if (barrierOfferConfig) game.pendingPostRelicMilestoneBarrierOffer = cloneContinueData(barrierOfferConfig);
+    return hasPendingPostRelicMilestoneOffer();
+  }
+
+  function openPendingPostRelicMilestoneOffer() {
+    const heroOfferConfig = game.pendingPostRelicMilestoneHeroOffer;
+    const barrierOfferConfig = game.pendingPostRelicMilestoneBarrierOffer;
+    if (!heroOfferConfig && !barrierOfferConfig) return false;
+    game.pendingPostRelicMilestoneHeroOffer = null;
+    game.pendingPostRelicMilestoneBarrierOffer = null;
+    if (heroOfferConfig) {
+      openMilestoneHeroOffer(heroOfferConfig);
+      showBanner(heroOfferConfig.startWaveSkipBonus ? `Wave ${heroOfferConfig.wave} skip bonus: paid extra hero offer unlocked.` : `Help has arrived at wave ${heroOfferConfig.wave}.`, 2600);
+      log(`${heroOfferConfig.startWaveSkipBonus ? 'Start-wave skip' : 'Milestone'} hero offer unlocked after wave ${heroOfferConfig.wave}: hire one level ${heroOfferConfig.heroLevel} hero of your choice for ${getMilestoneHeroOfferPaymentLabel(heroOfferConfig)}.`);
+    }
+    if (barrierOfferConfig) {
+      openMilestoneBarrierOffer(barrierOfferConfig);
+      showBanner(`Barrier bundle unlocked at wave ${barrierOfferConfig.wave}.`, 2600);
+      log(`Barrier offer unlocked after wave ${barrierOfferConfig.wave}: buy ${barrierOfferConfig.barrierCount} more barriers for ${canUseAvaxRailsPurchases() ? formatAvaxValue(AVAX_MILESTONE_BARRIER_WEI) : (barrierOfferConfig.burnCost.toLocaleString() + ' DFK Gold')}.`);
+    }
+    closeDfkgoldSwapOffer();
+    game.relicChoices = [];
+    game.countdownMs = 0;
+    game.autoStartReadyAt = 0;
+    if (els.startWaveBtn) els.startWaveBtn.disabled = true;
+    const offerParts = [];
+    if (heroOfferConfig) offerParts.push(`hire a level ${heroOfferConfig.heroLevel} hero of your choice for ${getMilestoneHeroOfferPaymentLabel(heroOfferConfig)}`);
+    if (barrierOfferConfig) offerParts.push(`buy ${barrierOfferConfig.barrierCount} more barriers for ${canUseAvaxRailsPurchases() ? formatAvaxValue(AVAX_MILESTONE_BARRIER_WEI) : (barrierOfferConfig.burnCost.toLocaleString() + ' DFK Gold')}`);
+    setInstruction(`Bonus offer: ${offerParts.join(' or ')}.`);
+    renderMilestoneHeroOffer();
+    return true;
+  }
+
   function finishMilestoneOffer(startCountdown = true, options = {}) {
     const { keepHero = false, keepBarrier = false } = options || {};
     const heroOffer = game.milestoneHeroOffer;
@@ -6570,34 +6653,53 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     return 0;
   }
 
-  function getMilestoneHeroJewelPriceWei(offer) {
+  function hasMilestoneHeroD20Discount() {
+    return !!game.nextHeroHireHalfPrice;
+  }
+
+  function getMilestoneHeroJewelAmount(offer) {
     void offer;
-    return DFK_JEWEL_EXTRA_HIRE_WEI[0];
+    return Math.max(0, Number(DFK_EXTRA_HERO_JEWEL_COST || 0) * (hasMilestoneHeroD20Discount() ? 0.5 : 1));
+  }
+
+  function getMilestoneHeroAvaxPriceWei(offer) {
+    void offer;
+    const base = BigInt(String(AVAX_MILESTONE_HERO_WEI || '0'));
+    return (hasMilestoneHeroD20Discount() ? (base / 2n) : base).toString();
+  }
+
+  function getMilestoneHeroAvaxPriceLabel(offer) {
+    return formatAvaxValue(getMilestoneHeroAvaxPriceWei(offer));
+  }
+
+  function getMilestoneHeroJewelPriceWei(offer) {
+    return getDfkPaymentWeiForJewelAmount(getMilestoneHeroJewelAmount(offer), 'native_jewel');
   }
 
   function getMilestoneHeroJewelPriceLabel(offer) {
-    void offer;
-    return String(DFK_EXTRA_HERO_JEWEL_COST) + ' JEWEL';
+    return `${getMilestoneHeroJewelAmount(offer).toLocaleString(undefined, { maximumFractionDigits: 3 })} JEWEL`;
   }
 
   function getMilestoneHeroHonkPriceWei(offer) {
-    void offer;
-    return getDfkPaymentWeiForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'honk');
+    return getDfkPaymentWeiForJewelAmount(getMilestoneHeroJewelAmount(offer), 'honk');
   }
 
   function getMilestoneHeroHonkPriceLabel(offer) {
-    void offer;
-    return getDfkPaymentLabelForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'honk');
+    return getDfkPaymentLabelForJewelAmount(getMilestoneHeroJewelAmount(offer), 'honk');
   }
 
   function getMilestoneHeroRonPriceWei(offer) {
-    void offer;
-    return getDfkPaymentWeiForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'native_ron');
+    return getDfkPaymentWeiForJewelAmount(getMilestoneHeroJewelAmount(offer), 'native_ron');
   }
 
   function getMilestoneHeroRonPriceLabel(offer) {
-    void offer;
-    return getDfkPaymentLabelForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'native_ron');
+    return getDfkPaymentLabelForJewelAmount(getMilestoneHeroJewelAmount(offer), 'native_ron');
+  }
+
+  function consumeMilestoneHeroD20Discount() {
+    if (!game.nextHeroHireHalfPrice) return false;
+    game.nextHeroHireHalfPrice = false;
+    return true;
   }
 
   function ensureMilestonePaymentChoiceModalElements() {
@@ -6668,17 +6770,18 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const goldAvailable = false;
     const jewelWei = getMilestoneHeroJewelPriceWei(offer);
     const jewelLabel = getMilestoneHeroJewelPriceLabel(offer);
-    const avaxLabel = formatAvaxValue(AVAX_MILESTONE_HERO_WEI);
+    const avaxWei = getMilestoneHeroAvaxPriceWei(offer);
+    const avaxLabel = getMilestoneHeroAvaxPriceLabel(offer);
     const jewelBalanceLabel = isConnectedWalletOnDfk() ? formatWalletNativeBalanceAs('JEWEL') : 'DFK Chain';
     const jewelAvailable = isConnectedWalletOnDfk() && hasWalletJewelForWei(jewelWei);
     const honkLabel = getMilestoneHeroHonkPriceLabel(offer);
     const honkBalanceLabel = isConnectedWalletOnDfk() ? getWalletHonkBalanceLabel() : 'DFK Chain';
-    const honkAvailable = isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(DFK_EXTRA_HERO_JEWEL_COST);
+    const honkAvailable = isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(getMilestoneHeroJewelAmount(offer));
     const ronLabel = getMilestoneHeroRonPriceLabel(offer);
     const ronBalanceLabel = isConnectedWalletOnRonin() ? formatWalletNativeBalanceAs('RON') : 'Ronin';
     const ronAvailable = isConnectedWalletOnRonin() && hasWalletNativeForWei(getMilestoneHeroRonPriceWei(offer));
     const avaxBalanceLabel = isConnectedWalletOnAvax() ? formatWalletNativeBalanceAs('AVAX') : 'Avalanche';
-    const avaxAvailable = useAvax && hasWalletNativeForWei(AVAX_MILESTONE_HERO_WEI);
+    const avaxAvailable = useAvax && hasWalletNativeForWei(avaxWei);
     body.innerHTML = `<p>Hire ${template.name} L${offer.heroLevel}. Choose how you want to pay.</p>
       <p>${useAvax ? avaxLabel : `${jewelLabel}, ${honkLabel}, or ${ronLabel}` }.</p>`;
     actions.innerHTML = '';
@@ -6747,13 +6850,13 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const offer = game.milestoneHeroOffer;
     if (!offer) return;
     if (canUseAvaxRailsPurchases()) {
-      if (hasWalletNativeForWei(AVAX_MILESTONE_HERO_WEI)) return beginMilestoneHeroHireAvax(heroType);
+      if (hasWalletNativeForWei(getMilestoneHeroAvaxPriceWei(offer))) return beginMilestoneHeroHireAvax(heroType);
       openMilestonePaymentChoiceModal(heroType);
       return null;
     }
     const goldAvailable = false;
     const jewelAvailable = isConnectedWalletOnDfk() && hasWalletJewelForWei(getMilestoneHeroJewelPriceWei(offer));
-    const honkAvailable = isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(DFK_EXTRA_HERO_JEWEL_COST);
+    const honkAvailable = isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(getMilestoneHeroJewelAmount(offer));
     const ronAvailable = isConnectedWalletOnRonin() && hasWalletNativeForWei(getMilestoneHeroRonPriceWei(offer));
     if ([goldAvailable, jewelAvailable, honkAvailable, ronAvailable].filter(Boolean).length > 1) {
       openMilestonePaymentChoiceModal(heroType);
@@ -6772,7 +6875,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       openMilestonePaymentChoiceModal(heroType);
       return null;
     }
-    showBanner(`Need 2 JEWEL, HONK equivalent on DFK Chain, or ${getMilestoneHeroRonPriceLabel(offer)} on Ronin to hire this hero.`, 2400);
+    showBanner(`Need ${getMilestoneHeroJewelPriceLabel(offer)}, HONK equivalent on DFK Chain, or ${getMilestoneHeroRonPriceLabel(offer)} on Ronin to hire this hero.`, 2400);
     return null;
   }
 
@@ -6800,6 +6903,12 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     setInstruction(`Your ${template.name} reinforcement is ready in the Hire menu now. Place it whenever you are ready.`);
     render();
     return game.pendingMilestoneHeroPlacement;
+  }
+
+  function getMilestoneHeroOfferPaymentLabel(offer) {
+    if (!offer) return '';
+    if (canUseAvaxRailsPurchases()) return getMilestoneHeroAvaxPriceLabel(offer);
+    return `${getMilestoneHeroJewelPriceLabel(offer)}, ${getMilestoneHeroHonkPriceLabel(offer)}, or ${getMilestoneHeroRonPriceLabel(offer)}`;
   }
 
   function showHeroPlacementReminder(heroLabel) {
@@ -6924,10 +7033,10 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const walletDfkgold = getWalletDfkgoldBalance();
     const hasWallet = !!getConnectedWalletAddress();
     const jewelLabel = heroOffer ? getMilestoneHeroJewelPriceLabel(heroOffer) : '';
-    const avaxHeroLabel = heroOffer ? formatAvaxValue(AVAX_MILESTONE_HERO_WEI) : '';
+    const avaxHeroLabel = heroOffer ? getMilestoneHeroAvaxPriceLabel(heroOffer) : '';
     const jewelAvailable = !!(heroOffer && isConnectedWalletOnDfk() && hasWalletJewelForWei(getMilestoneHeroJewelPriceWei(heroOffer)));
     const honkLabel = heroOffer ? getMilestoneHeroHonkPriceLabel(heroOffer) : '';
-    const honkAvailable = !!(heroOffer && isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(DFK_EXTRA_HERO_JEWEL_COST));
+    const honkAvailable = !!(heroOffer && isConnectedWalletOnDfk() && getWalletHonkBalance() + 1e-9 >= getHonkPurchaseAmountFromJewel(getMilestoneHeroJewelAmount(heroOffer)));
     const ronLabel = heroOffer ? getMilestoneHeroRonPriceLabel(heroOffer) : '';
     const ronAvailable = !!(heroOffer && isConnectedWalletOnRonin() && hasWalletNativeForWei(getMilestoneHeroRonPriceWei(heroOffer)));
     const shouldAutoRefreshMilestoneWallet = !!(heroOffer && hasWallet && !useAvax && isConnectedWalletOnDfk());
@@ -6943,7 +7052,8 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const milestoneTxnPending = !!game.milestoneOfferTxnPending;
     title.textContent = heroOffer ? `Reinforcements at Wave ${heroOffer.wave}` : `Barrier Bundle at Wave ${barrierOffer.wave}`;
     if (heroOffer) {
-      sections.push(`<p>You survived long enough for help to arrive. One time offer to hire a new hero of your choice for ${useAvax ? avaxHeroLabel : `${jewelLabel}, ${honkLabel}, or ${ronLabel}` }.</p><p>The hired hero arrives at level ${heroOffer.heroLevel} after the payment is confirmed. After confirming the TX this pop up will disappear, click anywhere on the board to place your new hired hero. They can be moved after placement. If you forget to place them they will appear in the hero hire menu to be placed later for free.</p>`);
+      const discountText = hasMilestoneHeroD20Discount() ? '<p class="milestone-hero-discount-note"><strong>D20 discount active:</strong> this reinforcement hire is half price.</p>' : '';
+      sections.push(`<p>You survived long enough for help to arrive. One time offer to hire a new hero of your choice for ${useAvax ? avaxHeroLabel : `${jewelLabel}, ${honkLabel}, or ${ronLabel}` }.</p>${discountText}<p>The hired hero arrives at level ${heroOffer.heroLevel} after the payment is confirmed. After confirming the TX this pop up will disappear, click anywhere on the board to place your new hired hero. They can be moved after placement. If you forget to place them they will appear in the hero hire menu to be placed later for free.</p>`);
     }
     if (barrierOffer) {
       const barrierLabel = useAvax ? formatAvaxValue(AVAX_MILESTONE_BARRIER_WEI) : `${barrierOffer.burnCost.toLocaleString()} DFK Gold`;
@@ -6952,7 +7062,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     body.innerHTML = sections.join('');
     actions.innerHTML = '';
     if (heroOffer) {
-      const heroTypes = ['warrior', 'archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker'];
+      const heroTypes = ['warrior', 'archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker', 'thief'];
       const goldAvailable = false;
       const canLaunchHire = hasWallet && (useAvax || goldAvailable || jewelAvailable || honkAvailable || ronAvailable);
       for (const type of heroTypes) {
@@ -7154,6 +7264,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
         jewelPrice: jewelLabel,
       });
       queueMilestoneReinforcement(heroType, offer, result && result.txHash ? result.txHash : '');
+      consumeMilestoneHeroD20Discount();
       log(`Milestone hire unlocked at wave ${offer.wave}: ${template.name} arrives at level ${offer.heroLevel} after paying ${jewelLabel}.`);
       showBanner(`${template.name} reinforcement ready in the Hire menu.`, 2200);
       finishMilestoneOffer(false);
@@ -7185,6 +7296,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
         honkPrice: honkLabel,
       });
       queueMilestoneReinforcement(heroType, offer, result && result.txHash ? result.txHash : '');
+      consumeMilestoneHeroD20Discount();
       log(`Milestone hire unlocked at wave ${offer.wave}: ${template.name} arrives at level ${offer.heroLevel} after paying ${honkLabel}.`);
       showBanner(`${template.name} reinforcement ready in the Hire menu.`, 2200);
       finishMilestoneOffer(false);
@@ -7216,6 +7328,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
         ronPrice: ronLabel,
       });
       queueMilestoneReinforcement(heroType, offer, result && result.txHash ? result.txHash : '');
+      consumeMilestoneHeroD20Discount();
       log(`Milestone hire unlocked at wave ${offer.wave}: ${template.name} arrives at level ${offer.heroLevel} after paying ${ronLabel}.`);
       showBanner(`${template.name} reinforcement ready in the Hire menu.`, 2200);
       finishMilestoneOffer(false);
@@ -7236,15 +7349,17 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     if (!offer || !template) return;
     setMilestoneOfferTxnPending(`${template.name} hire`);
     try {
-      
-      const result = await performAvaxTreasuryPurchase('hero_hire', AVAX_MILESTONE_HERO_WEI, `${template.name} reinforcement`, {
+      const avaxWei = getMilestoneHeroAvaxPriceWei(offer);
+      const avaxLabel = getMilestoneHeroAvaxPriceLabel(offer);
+      const result = await performAvaxTreasuryPurchase('hero_hire', avaxWei, `${template.name} reinforcement`, {
         wave: offer.wave,
         heroType,
         heroLevel: offer.heroLevel,
         treasuryAddress: AVAX_TREASURY_ADDRESS,
       });
       queueMilestoneReinforcement(heroType, offer, result && result.txHash ? result.txHash : '');
-      log(`Milestone hire unlocked at wave ${offer.wave}: ${template.name} arrives at level ${offer.heroLevel} after paying ${formatAvaxValue(AVAX_MILESTONE_HERO_WEI)}.`);
+      consumeMilestoneHeroD20Discount();
+      log(`Milestone hire unlocked at wave ${offer.wave}: ${template.name} arrives at level ${offer.heroLevel} after paying ${avaxLabel}.`);
       showBanner(`${template.name} reinforcement ready in the Hire menu.`, 2200);
       finishMilestoneOffer(false);
       if (options && options.preserveModal) {
@@ -7696,10 +7811,14 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     return tower.damageByMethod;
   }
 
-  function recordTowerDamage(tower, appliedDamage, methodKey = 'basic_attack', methodLabel = 'Basic Attack') {
+  function recordTowerDamage(tower, appliedDamage, methodKey = 'basic_attack', methodLabel = 'Basic Attack', options = null) {
     if (!tower || !Number.isFinite(Number(appliedDamage)) || Number(appliedDamage) <= 0) return;
     const amount = Number(appliedDamage);
     tower.damageDealt = Math.max(0, Number(tower.damageDealt || 0)) + amount;
+    if (tower.type === 'thief') {
+      if (options && options.invisible) tower.thiefInvisibleDamage = Math.max(0, Number(tower.thiefInvisibleDamage || 0)) + amount;
+      else tower.thiefNormalDamage = Math.max(0, Number(tower.thiefNormalDamage || 0)) + amount;
+    }
     const methods = ensureTowerDamageMethods(tower);
     const safeKey = String(methodKey || 'basic_attack');
     if (!methods[safeKey]) methods[safeKey] = { label: String(methodLabel || 'Basic Attack'), damage: 0, gen0Regular: 0, gen0Bonus: 0, gen0Actual: 0 };
@@ -7772,6 +7891,8 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
 
   function renderDamageReportMethodValue(method) {
     const total = Math.round(Math.max(0, Number(method?.damage || 0))).toLocaleString();
+    if (method?.unit === 'gold') return `${total} gold`;
+    if (method?.unit === 'kills') return `${total} kill${Math.round(Math.max(0, Number(method?.damage || 0))) === 1 ? '' : 's'}`;
     if (!method || !Number(method.gen0Actual || 0)) return total;
     const regular = Math.round(Math.max(0, Number(method.gen0Regular || 0))).toLocaleString();
     const gen0 = Math.round(Math.max(0, Number(method.gen0Actual || 0))).toLocaleString();
@@ -7817,7 +7938,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       </div>
       <div class="wallet-hero-scan-track" aria-hidden="true">
         <img class="wallet-hero-scan-runner" src="assets/dark-summoner.gif" alt="">
-        <img class="wallet-hero-scan-portal" src="portal-trans.png" alt="">
+        <img class="wallet-hero-scan-portal" src="godtree.png" alt="">
       </div>
     `;
     grid.insertAdjacentElement('afterend', wrap);
@@ -8009,7 +8130,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     return notice;
   }
 
-  function showWaveGoldJackpot(amount, waveNumber) {
+  function showWaveGoldJackpot(amount, waveNumber, titleText = '50x Gold Drop') {
     const notice = ensureWaveGoldJackpotMount();
     if (!notice) return;
     if (game.waveGoldJackpotTimer) {
@@ -8020,7 +8141,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     const title = notice.querySelector('.wave-gold-jackpot-title');
     const subtitle = notice.querySelector('.wave-gold-jackpot-subtitle');
     if (kicker) kicker.textContent = `Wave ${Math.max(1, Number(waveNumber || 0))} gold cache`;
-    if (title) title.textContent = '50x Gold Drop';
+    if (title) title.textContent = titleText;
     if (subtitle) subtitle.textContent = `+${formatJewel(amount)} gold`;
     notice.classList.remove('hidden');
     notice.style.animation = 'none';
@@ -8042,7 +8163,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     7: { name: 'Veteran Training', detail: 'All heroes gain 5 levels.' },
     8: { name: 'Battle Focus', detail: 'All heroes gain +10% attack speed for 5 waves.' },
     9: { name: 'Treasure Cache', detail: 'Gain gold equal to 5x the current wave.' },
-    10: { name: 'Half-Price Hire', detail: 'The next normal hero hire costs half price.' },
+    10: { name: 'Half-Price Reinforcement', detail: 'The next reinforcement hire costs half price.' },
     11: { name: 'Guardian Ward', detail: 'Next wave enemies deal 20% less damage.' },
     12: { name: 'Scout Report', detail: 'Next wave has 15% fewer enemies.' },
     13: { name: 'Power Surge', detail: 'Selected hero gains +20% damage for 3 waves.' },
@@ -8059,6 +8180,23 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     return D20_WAVE_BONUSES[Math.max(1, Math.min(20, Math.floor(Number(roll || 1))))] || D20_WAVE_BONUSES[1];
   }
 
+  function getD20WaveBonusInfoMarkup() {
+    const bonusRows = Object.keys(D20_WAVE_BONUSES)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((roll) => {
+        const bonus = getD20WaveBonus(roll);
+        return `<li><span>${roll}</span><strong>${escapeHtml(bonus.name)}</strong><em>${escapeHtml(bonus.detail)}</em></li>`;
+      })
+      .join('');
+    return `
+      <div class="d20-wave-roll-info-copy">
+        <p>Every 10 cleared waves, Fate pauses the run and lets you roll a D20. The number you stop on grants one in-game bonus before the next wave begins.</p>
+        <ol class="d20-wave-roll-info-list">${bonusRows}</ol>
+      </div>
+    `;
+  }
+
   function ensureD20WaveRollOverlay() {
     let overlay = document.getElementById('d20WaveRollOverlay');
     if (overlay) return overlay;
@@ -8069,8 +8207,10 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     overlay.setAttribute('aria-modal', 'true');
     overlay.innerHTML = `
       <div class="d20-wave-roll-panel">
+        <button class="d20-wave-roll-info-btn" type="button" aria-expanded="false" aria-controls="d20WaveRollInfo" title="What is the Fate Roll?">i</button>
         <div class="d20-wave-roll-kicker">Every 10 waves</div>
         <div class="d20-wave-roll-title">Fate Roll</div>
+        <div class="d20-wave-roll-info hidden" id="d20WaveRollInfo">${getD20WaveBonusInfoMarkup()}</div>
         <div class="d20-die" aria-hidden="true"><span>D20</span></div>
         <div class="d20-wave-roll-result">
           <span class="d20-wave-roll-number"></span>
@@ -8081,6 +8221,13 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       </div>
     `;
     document.body.appendChild(overlay);
+    const infoBtn = overlay.querySelector('.d20-wave-roll-info-btn');
+    const infoPanel = overlay.querySelector('#d20WaveRollInfo');
+    infoBtn?.addEventListener('click', () => {
+      const isHidden = !infoPanel || infoPanel.classList.contains('hidden');
+      if (infoPanel) infoPanel.classList.toggle('hidden', !isHidden);
+      infoBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+    });
     return overlay;
   }
 
@@ -8096,27 +8243,25 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       const name = overlay.querySelector('.d20-wave-roll-name');
       const detail = overlay.querySelector('.d20-wave-roll-detail');
       const actions = overlay.querySelector('.d20-wave-roll-actions');
+      const infoBtn = overlay.querySelector('.d20-wave-roll-info-btn');
+      const infoPanel = overlay.querySelector('#d20WaveRollInfo');
       overlay.classList.remove('hidden', 'is-resolved');
+      if (infoPanel) infoPanel.classList.add('hidden');
+      if (infoBtn) infoBtn.setAttribute('aria-expanded', 'false');
+      if (die) die.textContent = 'D20';
       if (number) number.textContent = `Wave ${Math.max(1, Number(waveNumber || 0))}`;
-      if (name) name.textContent = 'Rolling...';
-      if (detail) detail.textContent = 'The D20 is bouncing across the battlefield.';
-      if (actions) actions.innerHTML = '';
-      let ticks = 0;
-      const rollTimer = setInterval(() => {
-        ticks += 1;
-        if (die) die.textContent = String(1 + Math.floor(Math.random() * 20));
-      }, 75);
-      setTimeout(() => {
-        clearInterval(rollTimer);
+      if (name) name.textContent = 'Roll for Fate';
+      if (detail) detail.textContent = 'Click the D20 roll button to claim this 10-wave bonus.';
+      if (!actions) {
+        resolve('');
+        return;
+      }
+      const resolveRoll = () => {
         overlay.classList.add('is-resolved');
         if (die) die.textContent = String(roll);
         if (number) number.textContent = `Rolled ${roll}`;
         if (name) name.textContent = bonus.name;
         if (detail) detail.textContent = bonus.detail;
-        if (!actions) {
-          resolve('');
-          return;
-        }
         const closeWith = (choice = '') => {
           overlay.classList.add('hidden');
           resolve(choice);
@@ -8134,7 +8279,38 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
           actions.innerHTML = '<button type="button" data-d20-choice="continue">Continue</button>';
           actions.querySelector('button')?.addEventListener('click', () => closeWith(''));
         }
-      }, Math.max(1200, 1800 + (ticks * 0)));
+      };
+      const startRoll = () => {
+        overlay.classList.add('is-rolling');
+        overlay.classList.remove('is-resolved');
+        actions.innerHTML = '<button type="button" data-d20-stop>Stop</button>';
+        if (name) name.textContent = 'Rolling...';
+        if (detail) detail.textContent = 'The D20 is choosing a fate number.';
+        let stopRequested = false;
+        let stopTicksLeft = 0;
+        const rollTimer = setInterval(() => {
+          if (stopRequested) {
+            stopTicksLeft -= 1;
+            if (stopTicksLeft <= 0) {
+              clearInterval(rollTimer);
+              overlay.classList.remove('is-rolling');
+              resolveRoll();
+              return;
+            }
+          }
+          if (die) die.textContent = stopRequested && stopTicksLeft <= 1 ? String(roll) : String(1 + Math.floor(Math.random() * 20));
+        }, 90);
+        actions.querySelector('[data-d20-stop]')?.addEventListener('click', () => {
+          if (stopRequested) return;
+          stopRequested = true;
+          stopTicksLeft = 3;
+          if (detail) detail.textContent = 'Stopping... three ticks to fate.';
+          const stopBtn = actions.querySelector('[data-d20-stop]');
+          if (stopBtn) stopBtn.disabled = true;
+        }, { once: true });
+      };
+      actions.innerHTML = '<button type="button" data-d20-roll>Roll D20</button>';
+      actions.querySelector('[data-d20-roll]')?.addEventListener('click', startRoll, { once: true });
     });
   }
 
@@ -8145,7 +8321,9 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
     updateQuestMetric('goldEarned', safeAmount);
     pulseGoldPill();
     updateTopbar();
-    showWaveGoldJackpot(safeAmount, waveNumber);
+    const wave = Math.max(1, Number(waveNumber || 0));
+    const multiplier = Math.max(1, Math.round(safeAmount / wave));
+    showWaveGoldJackpot(safeAmount, waveNumber, `${multiplier}x Gold Drop`);
     log(`${label}: +${formatJewel(safeAmount)} Gold.`);
   }
 
@@ -8248,7 +8426,9 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
   }
 
   function openD20RelicChoice() {
+    game.d20FreeRelicPending = true;
     const opened = offerRelics('d20');
+    if (!opened) game.d20FreeRelicPending = false;
     if (opened) setInstruction('D20 bonus: choose one relic, or skip.');
     return opened;
   }
@@ -8266,7 +8446,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       case 7: levelAllHeroesBy(5); break;
       case 8: applyD20TemporaryBuff('battle_focus', 'Battle Focus', 5, { speedMult: 1.10 }); break;
       case 9: addD20Gold(wave * 5, 'D20 Treasure Cache', wave); break;
-      case 10: game.nextHeroHireHalfPrice = true; showBanner('Half-Price Hire: your next normal hero hire is 50% off.', 3000); renderHirePanel(); break;
+      case 10: game.nextHeroHireHalfPrice = true; showBanner('Half-Price Reinforcement: your next reinforcement offer is 50% off.', 3000); renderMilestoneHeroOffer(); break;
       case 11: game.d20GuardianWardUntilWave = Math.max(Number(game.d20GuardianWardUntilWave || 0), wave + 1); showBanner('Guardian Ward: next wave enemies deal 20% less damage.', 3000); break;
       case 12: game.forcedNextWaveVarianceId = 'fewer'; game.currentWaveRngRoll = { id: 'fewer', label: '15% fewer enemies', message: 'Scout Report is ready for the next wave.' }; showBanner('Scout Report: next wave has 15% fewer enemies.', 3000); updateTopbar(); break;
       case 13: applyD20TemporaryBuff('power_surge', 'Power Surge', 3, { damageMult: 1.20 }, (tower) => tower.id === selectedTower?.id); break;
@@ -8274,7 +8454,7 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       case 15: {
         const relic = pickRandom((game.ownedRelics || []).map(id => RELICS.find(item => item.id === id)).filter(Boolean));
         buffTowerType(game, 'warrior', { damageMult: 1.03 });
-        ['archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker'].forEach(type => buffTowerType(game, type, { damageMult: 1.03 }));
+        ['archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker', 'thief'].forEach(type => buffTowerType(game, type, { damageMult: 1.03 }));
         showBanner(`Relic Spark${relic ? `: ${relic.name}` : ''}: all heroes +3% damage.`, 3000);
         break;
       }
@@ -8356,6 +8536,10 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
           totalDamage: 0,
           totalHealing: 0,
           totalAvoided: 0,
+          thiefNormalDamage: 0,
+          thiefInvisibleDamage: 0,
+          thiefBackStabGoldEarned: 0,
+          thiefBackStabKills: 0,
           methods: new Map(),
           healingMethods: new Map(),
           satelliteCount: 0,
@@ -8365,6 +8549,12 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
       row.totalDamage += Math.max(0, Number(tower.damageDealt || 0));
       row.totalHealing += Math.max(0, Number(tower.healingDone || 0));
       row.totalAvoided += Math.max(0, Number(tower.damageAvoided || 0));
+      if (owner.type === 'thief') {
+        row.thiefNormalDamage += Math.max(0, Number(tower.thiefNormalDamage || 0));
+        row.thiefInvisibleDamage += Math.max(0, Number(tower.thiefInvisibleDamage || 0));
+        row.thiefBackStabGoldEarned += Math.max(0, Number(tower.thiefBackStabGoldEarned || 0));
+        row.thiefBackStabKills += Math.max(0, Number(tower.thiefBackStabKills || 0));
+      }
       if (tower.isSatellite) row.satelliteCount += 1;
       for (const method of getTowerDamageMethodRows(tower)) {
         const methodKey = String(method.label || 'Other');
@@ -8396,6 +8586,12 @@ const DFK_GOLD_BURN_QUEUE_STORAGE_KEY = 'dfk_defender_pending_burn_saves_v1';
         .filter(entry => entry.damage > 0)
         .sort((a, b) => b.damage - a.damage || a.label.localeCompare(b.label)),
       supportRows: [
+        ...(row.type === 'thief' ? [
+          { label: 'Normal Damage', damage: row.thiefNormalDamage || 0 },
+          { label: 'Invisible Damage', damage: row.thiefInvisibleDamage || 0 },
+          { label: 'Back Stab Gold', damage: row.thiefBackStabGoldEarned || 0, unit: 'gold' },
+          { label: 'Back Stab Kills', damage: row.thiefBackStabKills || 0, unit: 'kills' },
+        ].filter(entry => Math.max(0, Number(entry.damage || 0)) > 0) : []),
         ...Array.from(row.healingMethods || []),
         ...(row.totalHealing > 0 && !(row.healingMethods && row.healingMethods.length) ? [{ label: 'Healing', damage: row.totalHealing }] : []),
         ...(row.totalAvoided > 0 ? [{ label: 'Damage Avoided', damage: row.totalAvoided }] : []),
@@ -8991,6 +9187,7 @@ function renderDamageReport() {
               <label>Seer level <input id="adminLevelSeer" type="number" min="1" max="99" value="1"></label>
               <label>Berserker level <input id="adminLevelBerserker" type="number" min="1" max="99" value="1"></label>
               <label>Monk level <input id="adminLevelMonk" type="number" min="1" max="99" value="1"></label>
+              <label>Thief level <input id="adminLevelThief" type="number" min="1" max="99" value="1"></label>
             </div>
             <div class="winston-admin-apply-row">
               <button class="wallet-btn secondary tracking-btn" id="applyAdminRunSetupBtn" type="button">Apply Admin Run Setup</button>
@@ -9130,6 +9327,7 @@ function renderDamageReport() {
     seer: 'adminLevelSeer',
     berserker: 'adminLevelBerserker',
     monk: 'adminLevelMonk',
+    thief: 'adminLevelThief',
   });
 
   function getAdminHeroLevelOverridesFromUi() {
@@ -9523,12 +9721,19 @@ function renderDamageReport() {
 
   async function openMoosiferIntroModal() {
     const stats = getMoosiferBossStats();
-    const status = await fetchMoosiferBountyStatus();
-    const defeatedCount = Math.max(0, Number(status.defeatedCount || 0));
     const heroDps = Math.round(Number(stats.damage || 0) / MOOSIFER_ATTACK_INTERVAL_SECONDS);
     const voidHeroDps = Math.round(Number(stats.damage || 0) / (MOOSIFER_ATTACK_INTERVAL_SECONDS * 0.95));
     const portalDps = Math.round((Number(stats.damage || 0) * MOOSIFER_PORTAL_DAMAGE_MULTIPLIER) / (MOOSIFER_ATTACK_INTERVAL_SECONDS * 0.95));
     const auraPercent = (getMoosiferAuraDamagePercentPerSecond() * 100).toFixed(2);
+    const statRows = [
+      ['Difficulty', `D${stats.difficulty}`],
+      ['Health', `${stats.maxHp.toLocaleString()} HP`],
+      ['Hit Damage', stats.damage.toLocaleString()],
+      ['Hero DPS', heroDps.toLocaleString()],
+      ['Void DPS', voidHeroDps.toLocaleString()],
+      ['Portal DPS', portalDps.toLocaleString()],
+      ['Fire Aura', `${auraPercent}% HP/s`],
+    ];
     const modal = document.createElement('div');
     modal.id = 'moosiferIntroModal';
     modal.className = 'intro-modal';
@@ -9542,21 +9747,29 @@ function renderDamageReport() {
           </div>
         </div>
         <div class="intro-body moosifer-boss-body">
-          <img class="moosifer-boss-img" src="assets/moosifer-walking.gif" alt="Moosifer">
-          <p>Moosifer leaves the portal wrapped in fire. Before he reaches the void, his fire aura is his only attack and Warriors or Statues cannot hold him in place; he crashes straight through them. If he reaches the void, his maximum health rises by 50%, his current health jumps to 75% of that new max, then he turns back and attacks 5% faster on the way to the portal.</p>
-          <p>Moosifer was created by Maifriendo, and I am very grateful for his work bringing this beast to life.</p>
-          <p>Known immunities: Wizard Burn cannot damage or slow him, and he cannot be held in place by Warriors or Statues before he reaches the void. Defenders whisper that Moosifer may have other weaknesses no one has fully discovered yet.</p>
-          <div class="moosifer-boss-stats">
-            <span>D${stats.difficulty}</span>
-            <span>${stats.maxHp.toLocaleString()} HP</span>
-            <span>${stats.damage.toLocaleString()} hit</span>
-            <span>${heroDps.toLocaleString()} hero DPS</span>
-            <span>${voidHeroDps.toLocaleString()} void DPS</span>
-            <span>${portalDps.toLocaleString()} portal DPS</span>
-            <span>${auraPercent}% aura HP/s</span>
-            <span>${defeatedCount.toLocaleString()} defeated by players</span>
+          <div class="moosifer-boss-hero">
+            <img class="moosifer-boss-img" src="assets/moosifer-walking.gif" alt="Moosifer">
           </div>
-          <p class="moosifer-bounty-copy">The first player to defeat Moosifer will claim 500J.</p>
+          <div class="moosifer-boss-copy">
+            <p><strong>Path:</strong> Moosifer leaves the portal wrapped in fire. Before he reaches the void, his fire aura is his only attack and Warriors or Statues cannot hold him in place; he crashes straight through them.</p>
+            <p><strong>Void mutation:</strong> If he reaches the void, his maximum health rises by 50%, his current health jumps to 75% of that new max, then he turns back and attacks 5% faster on the way to the portal.</p>
+            <p><strong>Known immunities:</strong> Wizard Burn cannot damage or slow him, and he cannot be held in place by Warriors or Statues before he reaches the void. Defenders whisper that Moosifer may have other weaknesses no one has fully discovered yet.</p>
+            <p><strong>Creator credit:</strong> Moosifer was created by Maifriendo, and I am very grateful for his work bringing this beast to life.</p>
+          </div>
+          <div class="moosifer-boss-stats" aria-label="Moosifer stats">
+            ${statRows.map(([label, value]) => `
+              <div class="moosifer-stat-row">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+              </div>`).join('')}
+          </div>
+          <section class="moosifer-defeated-section" aria-label="Players who defeated Moosifer">
+            <h3>Defeated By Players</h3>
+            <ul class="moosifer-defeated-list">
+              <li class="moosifer-defeated-empty">No players yet.</li>
+            </ul>
+          </section>
+          <p class="moosifer-bounty-copy"><strong>First defeat bounty:</strong> 500J.</p>
         </div>
         <div class="intro-modal-footer">
           <button id="moosiferIntroStartBtn" type="button">Fight Moosifer</button>
@@ -9862,7 +10075,7 @@ function renderDamageReport() {
   function rarityForLevel(level) { return RARITIES[Math.min(4, Math.floor((level - 1) / 5))]; }
 
   function getRandomTreeVariant() {
-    const variants = ['tree1'];
+    const variants = ['rootwall'];
     return variants[Math.floor(Math.random() * variants.length)];
   }
 
@@ -9902,6 +10115,7 @@ function renderDamageReport() {
       pirate: 'pirate',
       monk: 'seer',
       berserker: 'warrior',
+      thief: 'thief',
     })[type] || 'default';
   }
 
@@ -10083,6 +10297,15 @@ function renderDamageReport() {
     game.hireCount = 0;
     game.warriorPlacedThisRun = false;
     game.bonusHeroHireCharges = 0;
+    game.nextHeroHireHalfPrice = false;
+    game.d20RollPending = false;
+    game.d20RollsApplied = {};
+    game.d20TemporaryBuffs = [];
+    game.d20GuardianWardUntilWave = 0;
+    game.d20FreeRelicPending = false;
+    game.pendingPostRelicMilestoneHeroOffer = null;
+    game.pendingPostRelicMilestoneBarrierOffer = null;
+    game.forcedNextWaveVarianceId = '';
     game.placingHeroUsesBonus = false;
     game.eliteWarningAcknowledgedWave = 0;
     game.eliteFinalSpawnReleasedWave = 0;
@@ -10105,6 +10328,8 @@ function renderDamageReport() {
     game.dfkGoldBurnedTotal = 0;
     game.milestoneHeroOffer = null;
     game.milestoneHeroOffersSeen = {};
+    game.pendingPostRelicMilestoneHeroOffer = null;
+    game.pendingPostRelicMilestoneBarrierOffer = null;
     game.milestoneBarrierOffer = null;
     game.milestoneBarrierOffersSeen = {};
     game.pendingMilestoneHeroPlacement = null;
@@ -11530,9 +11755,21 @@ function canSubmitRewardClaims() {
 
   const NEWS_ITEMS = [
     {
+      id: 'thief-arrives',
+      title: 'The Thief Arrives in NFT Defender',
+      date: 'May 26, 2026',
+      bodyHtml: '<p>A new assassin-style hero has entered the battlefield.</p><p>The Thief is a fast melee damage dealer built around burst damage, stealth windows, and opportunistic kills. Unlike the Warrior or Berserker, the Thief thrives on positioning and timing. When left untouched, the Thief can quickly carve through enemy waves and generate large amounts of bonus gold through precision kills.</p><p>At the core of the Thief&rsquo;s kit is Shadow Arc, a wide shadow slash that cuts through up to 15 enemies within 3 tiles. Each enemy struck takes 11 damage plus 28% of the Thief&rsquo;s current damage, allowing the skill to scale aggressively as the Thief levels up. Enemies hit also have a 10% chance to become Confused for 5 seconds, causing them to stumble unpredictably between nearby tiles. Shadow Arc unlocks at level 1 and has a 15 second cooldown.</p><p>The Thief&rsquo;s first passive, Twin Fang, enhances the hero&rsquo;s basic attacks. By default, attacks strike 1 enemy within 1 tile, but Twin Fang grows stronger over time. At level 18, attacks begin hitting 2 enemies, and at level 45 they strike up to 3 enemies at once. This allows the Thief to evolve from a single-target assassin into a dangerous close-range cleaver during later waves.</p><p>Back Stab gives the Thief its economic identity. Every Thief basic attack counts as a Back Stab, and if the attack lands the killing blow, bonus gold is stolen directly from the enemy. The reward scales with the current wave, granting 0.9x the current wave in bonus gold. At the current balance point, this results in roughly +8 bonus gold per successful Back Stab kill. Players who carefully secure kills can generate substantial extra income over the course of a run.</p><p>The Thief&rsquo;s signature mechanic is Vanish. Every 7 cleared waves, the Thief automatically disappears into the shadows for 3 waves. While vanished, enemies completely ignore the Thief and all damage dealt is doubled. However, manually moving the Thief immediately cancels invisibility. Vanish unlocks immediately and remains active through Wave 10.</p><h4>How to Play the Thief</h4><p>The Thief is not designed to stand on the front line. Instead, it excels when positioned near enemy traffic where it can safely secure kills and repeatedly trigger Back Stab bonuses. During normal waves, the Thief should focus on cleaning up weakened enemies and building extra gold income for the team.</p><p>Everything changes during Vanish windows.</p><p>When invisible, the Thief becomes one of the highest damage heroes in the game. Enemies will ignore it entirely, allowing the Thief to safely attack from dangerous positions while dealing double damage. Strong Thief play revolves around preparing for these stealth windows ahead of time rather than reacting after they begin. Because movement cancels invisibility, players are rewarded for careful setup and punished for panic repositioning.</p><p>The result is a hero that feels explosive, tactical, and highly rewarding when mastered.</p>'
+    },
+    {
+      id: 'axie-ronin-arrive',
+      title: 'Axie Infinity and Ronin Arrive in NFT Defender',
+      date: 'May 25, 2026',
+      bodyHtml: '<p>NFT Defender has officially expanded into the Ronin ecosystem, bringing Axie Infinity NFTs and RON integration directly into the game.</p><p>Players can now connect through the Ronin network, spend RON in-game, and earn RON rewards by completing quests, progressing through gameplay, and participating in the growing NFT Defender ecosystem. This marks one of the biggest expansions the game has seen so far and opens the door for a completely new style of progression and ownership.</p><p>The game itself has also received a major visual reskin inspired by the brighter fantasy identity of the Ronin ecosystem. The old darker interface has been replaced with a warm gold-and-emerald themed battlefield featuring glowing panels, moss-covered terrain, and a more vibrant fantasy atmosphere. The gameboard now uses a softer golden palette with high-contrast environmental assets that make towers, enemies, and interactable objects easier to read during gameplay. Ancient roots, glowing portals, magical shrines, and rocky terrain now define the visual style of the battlefield while still preserving the strategic grid-based gameplay NFT Defender is known for.</p><p>Axie NFTs now appear directly inside the game interface and can be viewed alongside the player&rsquo;s NFT roster. Connected Axies are already visible on the battlefield UI and integrated into the player profile systems, with much deeper gameplay functionality currently in development.</p><p>Soon, Axies will become fully controllable units with their own towers, abilities, upgrade paths, and battlefield interactions. Players will be able to strategically deploy Axie-based defenses and build entirely new compositions around their collections.</p><p>The addition of Ronin support is only the beginning. NFT Defender is continuing to evolve into a multi-ecosystem strategy game where NFTs are more than collectibles. They become active parts of gameplay itself.</p><p>Players can begin exploring the new Ronin integration now and start earning RON through gameplay and quests as development on the Axie systems continues.</p>'
+    },
+    {
       id: 'moosifer',
       title: 'The Summoner nears completion',
-      date: 'Just now',
+      date: 'May 8, 2026',
       image: 'assets/moosifer-walking.gif',
       shareable: true,
       body: '<p>The Druid senses it before anyone else, not as a sound or a shadow, but as a stillness laid too perfectly across the battlefield. The grass does not move. The air does not breathe. Even the portal seems to hold itself rigid, as if the world has realized something enormous is pressing its face against the other side.</p><p>The Sage reaches up slowly as one ear begins to itch, then burn with a heat that is not flame. The Dreadknight lowers his blade and turns toward the dark horizon, where no torch has been lit and no campfire should remain. &quot;That is not smoke from our world,&quot; he says, and for the first time his voice carries something close to fear.</p><p>Then a howl tears open the distance. It rolls over the board like thunder dragged through broken glass, and beneath it comes the garbled chant of the summoners, rising and folding over itself until the words become almost clear: <span class="moosifer-chant">MAIFRIENDO... MAIFRIENDO... MAIFRIENDO... MAIFRIENDO</span> The chant grows closer with every breath, and the fires around the heroes and champions flare brighter and hotter, not like they are being fed, but like they are trying to escape. Sparks crawl across shields, banners, and stones, hungry to set everything nearby ablaze.</p><p>Then every flame goes out at once. The battlefield falls into a silence so complete that even the horde of summoners seems swallowed by it. The Dark Summoner steps forward alone, raises both arms toward the portal, and releases a scream no throat should be able to hold. It is a word, but not a word from this plane. It bends the air, scrapes against the bones of every defender, and finally resolves into one terrible name: <span class="moosifer-chant">MOOOOOSIFER</span></p><p>At first, nothing happens. Then every summoner underling screams back in answer: <span class="moosifer-chant">MOOOOOSIFER</span> The portal turns red.</p><p>A giant rack of flaming antlers parts the opening first, pushing through like a crown made for the end of things. A massive muzzle follows with a roar that shakes dust from the stones, and thick maple syrup drips from its jowls as if the void itself has sweetened the monster for ruin. Another roar splits the battlefield, the portal buckles, and the beast forces its full weight into the world. Moosifer is here.</p>',
@@ -11614,46 +11851,50 @@ function canSubmitRewardClaims() {
       `;
     }
     return `
-      <article class="news-update-card ${index === 0 ? 'is-current' : ''}" data-news-id="${escapeHtml(item.id)}">
-        <div class="news-card-meta">${escapeHtml(item.date)}</div>
+      <article class="news-update-card standard-news-card ${index === 0 ? 'is-current' : ''}" data-news-id="${escapeHtml(item.id)}">
+        <div class="standard-news-topline">
+          <span class="news-card-meta">${escapeHtml(item.date)}</span>
+          <button class="news-share-btn" type="button" data-news-share="${escapeHtml(item.id)}">Copy share link</button>
+        </div>
         <h3>${escapeHtml(item.title)}</h3>
-        <p>${escapeHtml(item.body)}</p>
+        <div class="standard-news-body">${item.bodyHtml || `<p>${escapeHtml(item.body)}</p>`}</div>
       </article>
     `;
   }
 
   function renderNewsModal() {
     if (!els.newsBody) return;
-    const pages = [
-      { type: 'moosifer', label: 'Moosifer', html: renderNewsCard(NEWS_ITEMS.find(item => item.id === 'moosifer') || NEWS_ITEMS[0], 0) },
-      { type: 'releases', label: 'Release Items' },
-    ];
-    const pageIndex = Math.max(0, Math.min(pages.length - 1, Number(game.newsPageIndex || 0)));
+    const pageIndex = Math.max(0, Math.min(NEWS_ITEMS.length - 1, Number(game.newsPageIndex || 0)));
     game.newsPageIndex = pageIndex;
-    const timeline = NEWS_TIMELINE.map((item) => `
-      <li class="news-timeline-item">
-        <span class="news-timeline-dot" aria-hidden="true"></span>
-        <div><strong>${escapeHtml(item.label)}</strong><p>${escapeHtml(item.detail)}</p></div>
-      </li>
-    `).join('');
-    const releaseCards = NEWS_ITEMS.filter(item => item.id !== 'moosifer').map((item, index) => renderNewsCard(item, index + 1)).join('');
-    els.newsBody.innerHTML = pageIndex === 0 ? `
-      <section class="news-page news-page-current">${pages[0].html}</section>
-    ` : `
+    const item = NEWS_ITEMS[pageIndex] || NEWS_ITEMS[0];
+    const newerItem = pageIndex > 0 ? NEWS_ITEMS[pageIndex - 1] : null;
+    const olderItem = pageIndex < NEWS_ITEMS.length - 1 ? NEWS_ITEMS[pageIndex + 1] : null;
+    els.newsBody.innerHTML = `
       <section class="news-page news-page-current">
-        <div class="news-section-label">Release Items</div>
-        ${releaseCards}
-      </section>
-      <section class="news-page news-page-history">
-        <div class="news-section-label">Timeline</div>
-        <ol class="news-timeline">${timeline}</ol>
+        <div class="news-article-topbar">
+          <nav class="news-article-nav news-article-nav-top" aria-label="News article navigation">
+            ${olderItem ? `<button class="news-nav-btn news-nav-older" type="button" data-news-nav="older"><span aria-hidden="true">&larr;</span><span><strong>Older</strong><small>${escapeHtml(olderItem.title)}</small></span></button>` : ''}
+            ${newerItem ? `<button class="news-nav-btn news-nav-newer" type="button" data-news-nav="newer"><span><strong>Newer</strong><small>${escapeHtml(newerItem.title)}</small></span><span aria-hidden="true">&rarr;</span></button>` : ''}
+          </nav>
+          <div class="news-article-position">${pageIndex + 1} of ${NEWS_ITEMS.length}</div>
+        </div>
+        ${renderNewsCard(item, pageIndex)}
       </section>
     `;
-    if (els.newsPageCount) els.newsPageCount.textContent = `${pageIndex + 1} / ${pages.length}`;
-    if (els.newsPrevBtn) els.newsPrevBtn.disabled = pageIndex <= 0;
-    if (els.newsNextBtn) els.newsNextBtn.disabled = pageIndex >= pages.length - 1;
+    if (els.newsPageCount) els.newsPageCount.textContent = `${pageIndex + 1} / ${NEWS_ITEMS.length}`;
+    if (els.newsPrevBtn) els.newsPrevBtn.classList.toggle('hidden', !olderItem);
+    if (els.newsNextBtn) els.newsNextBtn.classList.toggle('hidden', !newerItem);
     els.newsBody.querySelectorAll('[data-news-share]').forEach((button) => {
       button.addEventListener('click', () => copyNewsShareLink(button.getAttribute('data-news-share')));
+    });
+    els.newsBody.querySelectorAll('[data-news-nav]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const direction = button.getAttribute('data-news-nav');
+        game.newsPageIndex = direction === 'older'
+          ? Math.min(NEWS_ITEMS.length - 1, pageIndex + 1)
+          : Math.max(0, pageIndex - 1);
+        renderNewsModal();
+      });
     });
   }
 
@@ -11981,6 +12222,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     monk: 'assets/hero_tile_monk.png',
     monk_alt: 'assets/hero_tile_monk2.png',
     berserker: 'assets/hero_tile_berserker.png',
+    thief: 'assets/hero_tile_thief.png',
+    thief_alt: 'assets/hero_tile_thief2.png',
     champion_dreadknight: 'assets/hero_tile_dreadknight.png',
     champion_sage: 'assets/hero_tile_sage.png',
     champion_dragoon: 'assets/hero_tile_dragoon.png',
@@ -11996,6 +12239,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     pirate: 'assets/placeholder-pirate.png',
     monk: 'assets/placeholder-monk.png',
     berserker: 'assets/placeholder-berserker.png',
+    thief: 'assets/placeholder-thief.png',
   };
 
   const HERO_TILE_LABELS = {
@@ -12011,6 +12255,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     spellbow: 'SPELLBOW',
     monk: 'MONK',
     berserker: 'BERSERKER',
+    thief: 'THIEF',
     champion_dreadknight: 'DREADKNIGHT',
     champion_sage: 'SAGE',
     champion_dragoon: 'DRAGOON',
@@ -12057,6 +12302,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     6: 'monk',
     7: 'pirate',
     8: 'berserker',
+    2: 'thief',
     25: 'seer',
   });
   const DFK_CLASS_NAMES = Object.freeze({
@@ -12091,7 +12337,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     },
   });
   const CHAMPION_CLASS_LOOKUP = Object.freeze({ dreadknight: 'dreadknight', sage: 'sage', dragoon: 'dragoon', spellbow: 'spellbow' });
-  const DFK_SLOT_ORDER = ['warrior', 'archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker'];
+  const DFK_SLOT_ORDER = ['warrior', 'archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker', 'thief'];
   const DFK_GOLD_CONTRACT_ADDRESS = '0x576C260513204392F0eC0bc865450872025CB1cA';
   const DFK_GOLD_DECIMALS = 3;
   const DFK_GOLD_SWAP_COST = 30000;
@@ -12287,7 +12533,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     }
     if (changed) {
       try { renderGrid(); } catch (_error) {}
-      updateSelectedInfo();
+      try { renderSelection(); } catch (_error) {}
     }
   }
 
@@ -13429,7 +13675,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   }
 
   function isMeleeHeroType(type) {
-    return ['warrior', 'archer', 'pirate', 'monk', 'berserker', 'champion_dreadknight', 'champion_dragoon'].includes(String(type || ''));
+    return ['warrior', 'archer', 'pirate', 'monk', 'berserker', 'thief', 'champion_dreadknight', 'champion_dragoon'].includes(String(type || ''));
   }
 
   function hasSageChampionMeleeBuff(tower) {
@@ -15478,7 +15724,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       return;
     }
     if (game.walletHeroLoadPending) return;
-    const currentAutoLoadKey = `${String(address || '').toLowerCase()}::${Number(getConnectedWalletChainId() || 0)}`;
+    const currentAutoLoadKey = String(address || '').toLowerCase();
     if (!force && game.walletHeroAutoLoadedKey === currentAutoLoadKey) return;
     game.walletHeroLoadPending = true;
     game.walletHeroLoadError = '';
@@ -15750,7 +15996,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       if (heroesByKey.size > 0 || !loadedCachedRoster) commitWalletHeroRoster(heroesByKey);
       if (heroesByKey.size > 0) writeLocalWalletHeroCache(address, game.allWalletHeroRoster || []);
       queueWalletHeroesForServerIndex(address, game.allWalletHeroRoster || []).catch(() => {});
-      game.walletHeroAutoLoadedKey = `${String(address || '').toLowerCase()}::${Number(getConnectedWalletChainId() || 0)}`;
+      game.walletHeroAutoLoadedKey = String(address || '').toLowerCase();
       if (!game.walletHeroRoster.length && chainErrors.length) {
         game.walletHeroLoadError = `Hero chain read failed: ${chainErrors.join(' and ')}`;
       }
@@ -16303,6 +16549,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       if (tile.obstacle === 'player') {
         tile.el.classList.add('player-obstacle');
         if (!tile.treeVariant) tile.treeVariant = getRandomTreeVariant();
+        if (tile.treeVariant === 'tree1') tile.treeVariant = 'rootwall';
         tile.el.style.setProperty('--tree-img', `url(assets/${tile.treeVariant}.png)`);
       } else {
         tile.el.style.removeProperty('--tree-img');
@@ -16366,7 +16613,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         }
 
         let stackedBuffBadgeCount = 0;
-        const usesVerticalBuffStack = tower.type === 'monk' || tower.type === 'berserker';
+        const usesVerticalBuffStack = tower.type === 'monk' || tower.type === 'berserker' || tower.type === 'thief';
         const appendStackedBuffBadge = (text, title = '', extraClass = 'tile-buff-indicator tile-buff-indicator-sage') => {
           const badge = document.createElement('div');
           badge.className = extraClass;
@@ -16393,6 +16640,15 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         }
         if (tower.type === 'champion_dragoon' && tower.buffs?.championOverpowerCommand) {
           // Intentionally no extra orange command badge visual on the Dragoon tile.
+        }
+
+        if (tower.type === 'thief' && isThiefVanished(tower)) {
+          tile.el.classList.add('tile-thief-invisible');
+          const invisibleBadge = document.createElement('div');
+          invisibleBadge.className = 'tile-small tile-thief-invisible-badge';
+          invisibleBadge.textContent = 'INVISIBLE';
+          invisibleBadge.title = 'Vanish active';
+          tile.el.appendChild(invisibleBadge);
         }
 
         if (tower.isSatellite && tower.type === 'archer') {
@@ -16665,6 +16921,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
           moonNote.className = 'tile-hover-meta';
           moonNote.textContent = `High as a Kite active • returns after wave ${Math.max(0, Number(tower.berserkerMoonReturnWave || 0))}`;
           hover.appendChild(moonNote);
+        } else if (tower.type === 'thief' && isThiefVanished(tower)) {
+          const vanishNote = document.createElement('div');
+          vanishNote.className = 'tile-hover-meta';
+          vanishNote.textContent = `Vanish active - 2x damage through wave ${Math.max(0, Number(tower.thiefVanishUntilWave || 0))}`;
+          hover.appendChild(vanishNote);
         } else if (tower.isSoulSplit) {
           const soulSplitNote = document.createElement('div');
           soulSplitNote.className = 'tile-hover-meta';
@@ -16767,13 +17028,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const bottom = Math.max(...spawnTiles.map(tile => tile.el.offsetTop + tile.el.offsetHeight));
     const width = right - left;
     const height = bottom - top;
-    const insetX = Math.max(1, width * 0.03);
-    const insetY = Math.max(1, height * 0.01);
 
-    els.voidArt.style.left = `${left + insetX}px`;
-    els.voidArt.style.top = `${top + insetY}px`;
-    els.voidArt.style.width = `${Math.max(8, width - insetX * 2)}px`;
-    els.voidArt.style.height = `${Math.max(8, height - insetY * 2)}px`;
+    els.voidArt.style.left = `${left}px`;
+    els.voidArt.style.top = `${top}px`;
+    els.voidArt.style.width = `${Math.max(8, width)}px`;
+    els.voidArt.style.height = `${Math.max(8, height)}px`;
     els.voidArt.classList.remove('hidden');
   }
 
@@ -16788,7 +17047,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       const img = document.createElement('img');
       img.className = 'portal-art';
       img.alt = 'Portal';
-      img.src = 'portal-trans.png';
+      img.src = 'godtree.png';
       img.draggable = false;
       els.grid.appendChild(img);
       els.portalArt = img;
@@ -17765,10 +18024,13 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     return false;
   }
 
-  function getNextHireCost(includePendingPlacement = false) {
+  function getNextHireBaseCost(includePendingPlacement = false) {
     const index = Math.min(getLivingHireCount(includePendingPlacement), HIRE_COSTS.length - 1);
-    const baseCost = HIRE_COSTS[index];
-    return game.nextHeroHireHalfPrice ? Math.max(0, Math.ceil(Number(baseCost || 0) * 0.5)) : baseCost;
+    return HIRE_COSTS[index];
+  }
+
+  function getNextHireCost(includePendingPlacement = false) {
+    return getNextHireBaseCost(includePendingPlacement);
   }
 
   function shouldHideWarriorHireDuringStartingPlacement() {
@@ -17784,7 +18046,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const pendingMilestonePlacement = game.pendingMilestoneHeroPlacement && game.pendingMilestoneHeroPlacement.heroType
       ? { ...game.pendingMilestoneHeroPlacement }
       : null;
-    const heroTypes = ['warrior', 'archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker'];
+    const heroTypes = ['warrior', 'archer', 'wizard', 'seer', 'priest', 'pirate', 'monk', 'berserker', 'thief'];
     const reachedStandardHeroCap = hasReachedStandardHeroBoardCap(true);
     const suppressStartingWarriorHire = shouldHideWarriorHireDuringStartingPlacement();
     const normalAvailable = heroTypes.filter(type => {
@@ -17985,15 +18247,16 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const isFreeStartingRelic = !!game.startingRelicPending;
     const relicChoices = Array.isArray(game.relicChoices) ? game.relicChoices : [];
     for (const relic of relicChoices) {
+      const freeRelicChoice = isRelicFree(relic, isFreeStartingRelic);
       const card = document.createElement('div');
       card.className = 'card';
       const rarity = getRelicRarity(relic);
       card.classList.add('relic-choice-card', rarity.className);
-      card.innerHTML = `<div class="relic-choice-rarity ${rarity.className}">${rarity.label}</div><h4>${relic.name}</h4><p>${relic.desc}</p><p class="gold">${isFreeStartingRelic ? 'FREE STARTING RELIC' : getRelicCostLabel(relic)}</p>`;
+      card.innerHTML = `<div class="relic-choice-rarity ${rarity.className}">${rarity.label}</div><h4>${relic.name}</h4><p>${relic.desc}</p><p class="gold">${freeRelicChoice ? (isFreeStartingRelic ? 'FREE STARTING RELIC' : 'FREE D20 RELIC') : getRelicCostLabel(relic)}</p>`;
       const btn = document.createElement('button');
       btn.className = 'buy-btn';
-      btn.textContent = isFreeStartingRelic ? `Choose ${relic.name}` : `Buy ${relic.name}`;
-      btn.disabled = !isFreeStartingRelic && game.jewel < relic.cost;
+      btn.textContent = freeRelicChoice ? `Choose ${relic.name}` : `Buy ${relic.name}`;
+      btn.disabled = !freeRelicChoice && game.jewel < relic.cost;
       btn.addEventListener('click', () => buyRelic(relic.id));
       card.appendChild(btn);
       els.relicModalBody.appendChild(card);
@@ -18099,9 +18362,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       skip.textContent = 'Skip relic shop';
       skip.addEventListener('click', () => {
         game.relicChoices = [];
+        game.d20FreeRelicPending = false;
         closeDfkgoldSwapOffer();
         log('Skipped relic shop.');
-        setCountdown(WAVE_BREAK_SECONDS);
+        if (!openPendingPostRelicMilestoneOffer()) setCountdown(WAVE_BREAK_SECONDS);
         render();
       });
       els.relicModalBody.appendChild(skip);
@@ -18450,6 +18714,45 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     return tower;
   }
 
+  function getThiefTwinFangTargetCount(tower) {
+    const level = Math.max(1, Number(tower?.level || 1));
+    if (level >= 45) return 3;
+    if (level >= 18) return 2;
+    return 1;
+  }
+
+  function getThiefBasicTargets(tower) {
+    if (!tower) return [];
+    return game.enemies
+      .filter((enemy) => enemy.hp > 0 && chebyshevDist(enemy, tower) <= Number(tower.range || 1))
+      .sort((a, b) => portalDistance(a) - portalDistance(b))
+      .slice(0, getThiefTwinFangTargetCount(tower));
+  }
+
+  function isThiefVanished(tower) {
+    const vanishUntilWave = Number(tower && tower.thiefVanishUntilWave || 0);
+    const currentWave = Number(game.waveNumber || 0);
+    return !!(tower && tower.type === 'thief' && vanishUntilWave > 0 && currentWave > 0 && vanishUntilWave >= currentWave);
+  }
+
+  function clearThiefVanish(tower, reason = '') {
+    if (!tower || tower.type !== 'thief') return false;
+    const hadVanish = !!(tower.buffs?.vanish || isThiefVanished(tower));
+    tower.thiefVanishUntilWave = 0;
+    if (tower.buffs) delete tower.buffs.vanish;
+    if (hadVanish && reason) showBanner(reason, 1200);
+    return hadVanish;
+  }
+
+  function refreshThiefVanishState(tower) {
+    if (!tower || tower.type !== 'thief') return;
+    if (isThiefVanished(tower)) {
+      applyBuff(tower, 'vanish', 9999, { badgeText: 'VANISH' });
+    } else if (tower.buffs?.vanish) {
+      delete tower.buffs.vanish;
+    }
+  }
+
   function isNearPriest(tower) {
     return game.towers.some(t => t.type === 'priest' && t.id !== tower.id && dist(t, tower) <= 2);
   }
@@ -18664,6 +18967,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       see_the_moon: 1,
       high_as_a_kite: 1,
       eye_gouge: 1,
+      twin_fang: 1,
+      back_stab: 1,
+      shadow_arc: 1,
+      vanish: 1,
     };
     if (String(abilityKey || '').startsWith('champion_')) return 1;
     if (explicit[abilityKey] != null) return explicit[abilityKey];
@@ -18681,7 +18988,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   function getAbilityPowerMultiplier(tower, abilityKey) {
     if (abilityKey === 'healing_aura' || abilityKey === 'shield_bash') return 1;
     if (abilityKey === 'frozen_fist') return 1;
-    if (['temporal_restoration', 'warstone', 'chrono_purge', 'evasion'].includes(abilityKey)) return 1;
+    if (['temporal_restoration', 'warstone', 'chrono_purge', 'evasion', 'twin_fang', 'back_stab', 'shadow_arc', 'vanish'].includes(abilityKey)) return 1;
     return getAbilityIndex(tower, abilityKey) >= 2 ? 2 : 1;
   }
 
@@ -18934,6 +19241,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       see_the_moon: `Freezes enemies within 2 tiles in fear for 3s. Feared enemies take 25% more damage during that time. Cooldown: ${getAbilityCooldownSeconds(tower, 'see_the_moon').toFixed(1)}s.${common}${scale}`,
       high_as_a_kite: `Passive. Every 14-20 cleared waves, Berserker charges to the front for 7 waves and leaves behind a ghost on her original tile. While away she deals 2x damage and attacks 1.5x faster.${common}${scale}`,
       eye_gouge: `Passive. Berserker hits have a 25% chance to blind targets. Blinded enemies have a 25% chance to miss their attacks.${common}${scale}`,
+      twin_fang: `Passive. Basic attacks hit ${getThiefTwinFangTargetCount(tower)} enem${getThiefTwinFangTargetCount(tower) === 1 ? 'y' : 'ies'} within 1 tile. Twin Fang hits 2 enemies at level 18 and 3 enemies at level 45.${common}${scale}`,
+      back_stab: `Passive. Thief basic attacks are Back Stabs. If Back Stab lands the killing blow, steal ${THIEF_BACK_STAB_GOLD_PER_WAVE}x the current wave in gold. Current bonus: +${Math.round(Math.max(0, Number(game.waveNumber || 0) * THIEF_BACK_STAB_GOLD_PER_WAVE)).toLocaleString()} gold per Back Stab kill.${common}${scale}`,
+      shadow_arc: `Slashes shadows through up to ${THIEF_SHADOW_ARC_MAX_TARGETS} enemies within 3 tiles for ${Math.round(d * THIEF_SHADOW_ARC_DAMAGE_MULTIPLIER)} damage each. Damage is 28% of Thief damage per enemy hit. Each hit has a ${Math.round(THIEF_SHADOW_ARC_CONFUSE_CHANCE * 100)}% chance to confuse the enemy for ${THIEF_SHADOW_ARC_CONFUSE_DURATION_SECONDS}s, making it stumble between two tiles. Cooldown: ${getAbilityCooldownSeconds(tower, 'shadow_arc').toFixed(1)}s.${common}${scale}`,
+      vanish: `Passive. Every ${THIEF_VANISH_INTERVAL_WAVES} cleared waves, the Thief vanishes for ${THIEF_VANISH_DURATION_WAVES} waves and deals 2x damage. Moving cancels invisibility.${isThiefVanished(tower) ? ` Active through wave ${Math.max(0, Number(tower.thiefVanishUntilWave || 0))}.` : ''}${common}${scale}`,
       prayer_of_healing: `Heals nearby allies within 5 tiles for ${Math.round(PRAYER_OF_HEALING_HEAL_PERCENT * 100)}% of each target's max HP.${game.modifiers.sacredSculpting ? '<br><strong>Sacred Sculpting active:</strong> Statues can be healed for 30% of that amount.' : ''}${game.modifiers.prayerCooldownAdjust ? `<br><strong>Devotion active:</strong> Prayer of Healing cooldown reduced by ${game.modifiers.prayerCooldownAdjust.toFixed(1)}s.` : ''}${common}${scale}`,
       slow_totem: `Support Satellite. Every 10 cleared waves, the Priest gains 1 Blinding Light Totem charge. Place it on any open tile for ${BLINDING_LIGHT_TOTEM_DURATION_WAVES} waves. Enemies in the aura are slowed by ${(BLINDING_LIGHT_TOTEM_SLOW_PERCENT * 100).toFixed(0)}%, their attack speed is slowed by ${(BLINDING_LIGHT_TOTEM_ATTACK_SLOW_PERCENT * 100).toFixed(0)}%, and both effects linger for ${BLINDING_LIGHT_TOTEM_LINGER_SECONDS}s after leaving. Unlocks at level ${getAbilityUnlockLevel(tower, abilityKey)}.${scale}`,
       swiftness: `Boosts nearby allies' attack speed by ${Math.round(25 * powerMult)}% for 8s.${stronger}${common}${scale}`,
@@ -19637,10 +19948,6 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       updateQuestMetric('goldSpent', cost);
       updateQuestMetric('heroesPlaced', 1);
       updateWeeklyBountyMetric('heroesDeployed', 1);
-      if (!usesBonusHire && !pendingMilestonePlacement && cost > 0 && game.nextHeroHireHalfPrice) {
-        game.nextHeroHireHalfPrice = false;
-        showBanner('Half-price hire used.', 1600);
-      }
       if (usesBonusHire) game.bonusHeroHireCharges = Math.max(0, game.bonusHeroHireCharges - 1);
       game.placingWalletHeroId = null;
       const placementVerb = pendingMilestonePlacement
@@ -19721,7 +20028,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         if (!inBounds(x, y)) continue;
         if (x === tower.x && y === tower.y) continue;
         const probe = { x, y };
-        const inRange = ['warrior', 'monk', 'berserker'].includes(tower.type) ? chebyshevDist(tower, probe) <= loopRadius : dist(tower, probe) <= effectiveRadius;
+        const inRange = ['warrior', 'monk', 'berserker', 'thief'].includes(tower.type) ? chebyshevDist(tower, probe) <= loopRadius : dist(tower, probe) <= effectiveRadius;
         if (!inRange) continue;
         tiles.push(probe);
       }
@@ -19763,6 +20070,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     tileAt(nx, ny).towerId = tower.id;
     tower.moveReadyAt = now() + (tower.type === 'warrior' ? 5000 : (tower.type === 'monk' ? 0 : 30000));
     tower.attackCooldownMs = 1000;
+    if (tower.type === 'thief') clearThiefVanish(tower, 'Moving canceled Vanish.');
     log(`${tower.name} moved to (${nx + 1}, ${ny + 1}).`);
     recordReplayEvent('tower_move', { towerId: tower.id, type: tower.type, x: nx, y: ny });
     syncMonkTrainingPartnerState();
@@ -20294,6 +20602,89 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     return true;
   }
 
+  function canUseConfusionTile(enemy, x, y) {
+    if (!inBounds(x, y)) return false;
+    const tile = tileAt(x, y);
+    if (!tile || tile.obstacle || tile.portal) return false;
+    if (tile.towerId) {
+      const tower = game.towers.find(t => t.id === tile.towerId);
+      if (tower && (tower.type === 'warrior' || isStatueTower(tower))) return false;
+    }
+    return true;
+  }
+
+  function pickConfusionStumbleTile(enemy) {
+    if (!enemy) return null;
+    return adjacentTiles(enemy.x, enemy.y)
+      .filter((step) => canUseConfusionTile(enemy, step.x, step.y))
+      .map((step) => ({ ...step, score: Math.random() + (getPortalFlowDistance(step.x, step.y) * 0.002) }))
+      .sort((a, b) => a.score - b.score)[0] || null;
+  }
+
+  function tryApplyShadowArcConfusion(enemy, tower) {
+    if (!enemy || enemy.hp <= 0 || enemy.isMoosifer) return false;
+    if (Math.random() >= THIEF_SHADOW_ARC_CONFUSE_CHANCE) return false;
+    const current = now();
+    const stumbleTile = pickConfusionStumbleTile(enemy);
+    if (!stumbleTile) return false;
+    applyDebuff(enemy, 'confused', THIEF_SHADOW_ARC_CONFUSE_DURATION_SECONDS, {
+      sourceTowerId: tower?.id || null,
+      anchorX: enemy.x,
+      anchorY: enemy.y,
+      stumbleX: stumbleTile.x,
+      stumbleY: stumbleTile.y,
+      nextStumbleAt: current + 180,
+      stumbleIntervalMs: 520,
+    });
+    clearEnemyRouteCache(enemy);
+    enemy.attacking = false;
+    enemy.nextAttackAt = Math.max(Number(enemy.nextAttackAt || 0), current + (THIEF_SHADOW_ARC_CONFUSE_DURATION_SECONDS * 1000));
+    createHitFlash(enemy.x, enemy.y, 'thief', 'CONFUSED', { smallText: true, centerText: true, duration: 650 });
+    return true;
+  }
+
+  function updateConfusedEnemy(enemy, current) {
+    const debuff = enemy?.debuffs?.confused;
+    if (!enemy || !debuff) return false;
+    enemy.attacking = false;
+    if (enemy.debuffs?.stunned || enemy.debuffs?.rooted) return true;
+    if (current < Number(debuff.nextStumbleAt || 0)) return true;
+    const anchor = { x: Number(debuff.anchorX), y: Number(debuff.anchorY) };
+    let stumble = { x: Number(debuff.stumbleX), y: Number(debuff.stumbleY) };
+    if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y) || !inBounds(anchor.x, anchor.y)) {
+      debuff.anchorX = enemy.x;
+      debuff.anchorY = enemy.y;
+      anchor.x = enemy.x;
+      anchor.y = enemy.y;
+    }
+    if (!Number.isFinite(stumble.x) || !Number.isFinite(stumble.y) || !canUseConfusionTile(enemy, stumble.x, stumble.y)) {
+      stumble = pickConfusionStumbleTile(enemy) || anchor;
+      debuff.stumbleX = stumble.x;
+      debuff.stumbleY = stumble.y;
+    }
+    const atAnchor = enemy.x === anchor.x && enemy.y === anchor.y;
+    const target = atAnchor ? stumble : anchor;
+    if (!target || !canUseConfusionTile(enemy, target.x, target.y) || (target.x === enemy.x && target.y === enemy.y)) {
+      debuff.nextStumbleAt = current + Math.max(260, Number(debuff.stumbleIntervalMs || 520));
+      return true;
+    }
+    const fromX = enemy.x;
+    const fromY = enemy.y;
+    updateEnemyFacingX(enemy, target.x);
+    enemy.prevX = fromX;
+    enemy.prevY = fromY;
+    enemy.x = target.x;
+    enemy.y = target.y;
+    commitEnemyVisualStep(enemy, fromX, fromY, target.x, target.y, current, Math.min(420, getEnemyMoveCadenceMs(enemy)));
+    clearEnemyRouteCache(enemy);
+    enemy.targetPath = [];
+    enemy.stuckAt = 0;
+    enemy.lastProgressAt = current;
+    debuff.nextStumbleAt = current + Math.max(260, Number(debuff.stumbleIntervalMs || 520));
+    enemy.nextMoveAt = Math.min(Number(enemy.nextMoveAt || debuff.nextStumbleAt), debuff.nextStumbleAt);
+    return true;
+  }
+
   function performChampionDreadknightCrush(tower, current = now()) {
     if (!tower) return false;
     const crushTargets = game.enemies
@@ -20625,6 +21016,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       id: `e${game.nextEnemyId++}`,
       type: 'sky_terror',
       name: 'Flying Demon',
+      sourceWaveNumber: waveNumber,
       x: spawn.x,
       y: spawn.y,
       hp: maxHp,
@@ -21094,6 +21486,14 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       autoStartReadyAt: 0,
       autoStartToken: game.autoStartToken,
       bonusHeroHireCharges: game.bonusHeroHireCharges,
+      nextHeroHireHalfPrice: !!game.nextHeroHireHalfPrice,
+      forcedNextWaveVarianceId: game.forcedNextWaveVarianceId || '',
+      d20RollsApplied: cloneContinueData(game.d20RollsApplied),
+      d20TemporaryBuffs: cloneContinueData(game.d20TemporaryBuffs),
+      d20GuardianWardUntilWave: Number(game.d20GuardianWardUntilWave || 0),
+      d20FreeRelicPending: !!game.d20FreeRelicPending,
+      pendingPostRelicMilestoneHeroOffer: cloneContinueData(game.pendingPostRelicMilestoneHeroOffer),
+      pendingPostRelicMilestoneBarrierOffer: cloneContinueData(game.pendingPostRelicMilestoneBarrierOffer),
       startWaveChoice: game.startWaveChoice,
       startWaveHeroLevel: game.startWaveHeroLevel,
       startWaveJumpPaid: !!game.startWaveJumpPaid,
@@ -21182,6 +21582,14 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       autoStartReadyAt: 0,
       autoStartToken: (game.autoStartToken || 0) + 1,
       bonusHeroHireCharges: game.bonusHeroHireCharges,
+      nextHeroHireHalfPrice: !!game.nextHeroHireHalfPrice,
+      forcedNextWaveVarianceId: game.forcedNextWaveVarianceId || '',
+      d20RollsApplied: cloneContinueData(game.d20RollsApplied),
+      d20TemporaryBuffs: cloneContinueData(game.d20TemporaryBuffs),
+      d20GuardianWardUntilWave: Number(game.d20GuardianWardUntilWave || 0),
+      d20FreeRelicPending: !!game.d20FreeRelicPending,
+      pendingPostRelicMilestoneHeroOffer: cloneContinueData(game.pendingPostRelicMilestoneHeroOffer),
+      pendingPostRelicMilestoneBarrierOffer: cloneContinueData(game.pendingPostRelicMilestoneBarrierOffer),
       startWaveChoice: game.startWaveChoice,
       startWaveHeroLevel: game.startWaveHeroLevel,
       startWaveJumpPaid: !!game.startWaveJumpPaid,
@@ -22416,6 +22824,15 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     game.autoStartReadyAt = 0;
     game.autoStartToken = snap.autoStartToken;
     game.bonusHeroHireCharges = 0;
+    game.nextHeroHireHalfPrice = !!snap.nextHeroHireHalfPrice;
+    game.forcedNextWaveVarianceId = String(snap.forcedNextWaveVarianceId || '');
+    game.d20RollPending = false;
+    game.d20RollsApplied = cloneContinueData(snap.d20RollsApplied) || {};
+    game.d20TemporaryBuffs = cloneContinueData(snap.d20TemporaryBuffs) || [];
+    game.d20GuardianWardUntilWave = Number(snap.d20GuardianWardUntilWave || 0);
+    game.d20FreeRelicPending = !!snap.d20FreeRelicPending;
+    game.pendingPostRelicMilestoneHeroOffer = cloneContinueData(snap.pendingPostRelicMilestoneHeroOffer) || null;
+    game.pendingPostRelicMilestoneBarrierOffer = cloneContinueData(snap.pendingPostRelicMilestoneBarrierOffer) || null;
     game.startWaveChoice = normalizePlayerStartWave(snap.startWaveChoice || game.startWaveChoice || 1);
     game.startWaveHeroLevel = Math.max(1, Number(snap.startWaveHeroLevel || getPlayerStartHeroLevel(game.startWaveChoice)));
     game.startWaveJumpPaid = !!snap.startWaveJumpPaid;
@@ -22828,6 +23245,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       id: `e${game.nextEnemyId++}`,
       type,
       name: template.name,
+      sourceWaveNumber: waveNumber,
       x: spawn.x,
       y: spawn.y,
       hp: finalEnemyHp * difficulty.healthMult * GLOBAL_ENEMY_HP_MULTIPLIER,
@@ -22872,6 +23290,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       id: `e${game.nextEnemyId++}`,
       type: boss.id,
       name: boss.name,
+      sourceWaveNumber: waveNumber,
       x: spawn.x,
       y: spawn.y,
       hp: bossHp,
@@ -23135,6 +23554,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     markProgress(`Wave ${clearedWave} cleared.`);
     log(`Wave ${clearedWave} cleared.`);
     recordReplayEvent('wave_cleared', { waveNumber: Number(clearedWave || 0) });
+    expireD20TemporaryBuffs(clearedWave);
     const liveWaveCountAtClear = Math.max(0, Number(context && context.liveWaveCountAtClear));
     updateQuestMetric('wavesClearedTotal', 1);
     updateWeeklyBountyMetric('wavesCompleted', 1);
@@ -23143,12 +23563,22 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     if (Number(clearedWave || 0) > 30) updateWeeklyBountyMetric('wavesPast30', 1);
     if (liveWaveCountAtClear >= 2) updateWeeklyBountyMetric('wavesMulti2', 1);
     if (liveWaveCountAtClear >= 3) updateWeeklyBountyMetric('wavesMulti3', 1);
-    const livingCoreHeroes = (game.towers || []).filter((tower) => tower && tower.hp > 0 && !tower.isSatellite && !tower.isChampion && ['warrior', 'archer', 'wizard', 'priest', 'seer', 'pirate', 'monk', 'berserker'].includes(String(tower.type || '')));
+    const livingCoreHeroes = (game.towers || []).filter((tower) => tower && tower.hp > 0 && !tower.isSatellite && !tower.isChampion && ['warrior', 'archer', 'wizard', 'priest', 'seer', 'pirate', 'monk', 'berserker', 'thief'].includes(String(tower.type || '')));
     if (livingCoreHeroes.some((tower) => tower.type === 'warrior')) updateWeeklyBountyMetric('wavesWithWarrior', 1);
     if (livingCoreHeroes.some((tower) => tower.type === 'archer')) updateWeeklyBountyMetric('wavesWithSpellbow', 1);
     if (livingCoreHeroes.some((tower) => tower.type === 'seer')) updateWeeklyBountyMetric('wavesWithSage', 1);
     if (livingCoreHeroes.length >= 2) updateWeeklyBountyMetric('wavesWithTwoHeroes', 1);
     updateWeeklyBountyMetric('heroAliveWaves', livingCoreHeroes.length);
+    if (Number(clearedWave || 0) > 0 && Number(clearedWave || 0) % THIEF_VANISH_INTERVAL_WAVES === 0) {
+      const thieves = livingCoreHeroes.filter((tower) => tower.type === 'thief');
+      for (const thief of thieves) {
+        thief.thiefVanishUntilWave = Number(clearedWave || 0) + THIEF_VANISH_DURATION_WAVES;
+        applyBuff(thief, 'vanish', 9999, { badgeText: 'VANISH' });
+      }
+      if (thieves.length) {
+        showBanner(`Vanish: ${thieves.length > 1 ? 'Thieves' : 'Thief'} hidden for ${THIEF_VANISH_DURATION_WAVES} waves`, 1800);
+      }
+    }
     if (getCurrentPlacedBarrierCount() >= getTargetPlayerObstacleCount()) {
       updateWeeklyBountyMetric('wavesAllBarriersPlaced', 1);
       updateWeeklyBountyMetric('wavesZeroBarrierLoss', 1);
@@ -23222,6 +23652,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     }
     if (finalWaveNumber >= 10) if (!game.weeklyBountyRunReached10) { updateWeeklyBountyMetric('runsReach10', 1); game.weeklyBountyRunReached10 = true; }
     if (finalWaveNumber >= 20) if (!game.weeklyBountyRunReached20) { updateWeeklyBountyMetric('runsReach20', 1); game.weeklyBountyRunReached20 = true; }
+    const continueAfterD20Roll = () => {
     let milestoneHeroOfferConfig = [...clearedPlans].reverse().map(plan => canOpenMilestoneHeroOffer(plan.waveNumber) ? getMilestoneHeroOfferConfig(plan.waveNumber) : null).find(Boolean) || null;
     if (!milestoneHeroOfferConfig) {
       const startSkipPlan = [...clearedPlans].reverse().find(plan => shouldGrantStartWaveExtraHero(plan.waveNumber));
@@ -23231,11 +23662,17 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         game.startWaveExtraHeroGranted = true;
       }
     }
-    const milestoneBarrierOfferConfig = [...clearedPlans].reverse().map(plan => canOpenMilestoneBarrierOffer(plan.waveNumber) ? getMilestoneBarrierOfferConfig(plan.waveNumber) : null).find(Boolean) || null;
+    let milestoneBarrierOfferConfig = [...clearedPlans].reverse().map(plan => canOpenMilestoneBarrierOffer(plan.waveNumber) ? getMilestoneBarrierOfferConfig(plan.waveNumber) : null).find(Boolean) || null;
+    if (game.d20FreeRelicPending && Array.isArray(game.relicChoices) && game.relicChoices.length && (milestoneHeroOfferConfig || milestoneBarrierOfferConfig)) {
+      deferMilestoneOffersUntilAfterRelic(milestoneHeroOfferConfig, milestoneBarrierOfferConfig);
+      milestoneHeroOfferConfig = null;
+      milestoneBarrierOfferConfig = null;
+      setInstruction('D20 bonus: choose one relic first. The reinforcement offer will appear after.');
+    }
     if (milestoneHeroOfferConfig) {
       openMilestoneHeroOffer(milestoneHeroOfferConfig);
       showBanner(milestoneHeroOfferConfig.startWaveSkipBonus ? `Wave ${milestoneHeroOfferConfig.wave} skip bonus: paid extra hero offer unlocked.` : `Help has arrived at wave ${milestoneHeroOfferConfig.wave}.`, 2600);
-      log(`${milestoneHeroOfferConfig.startWaveSkipBonus ? 'Start-wave skip' : 'Milestone'} hero offer unlocked after wave ${milestoneHeroOfferConfig.wave}: hire one level ${milestoneHeroOfferConfig.heroLevel} hero of your choice for ${canUseAvaxRailsPurchases() ? formatAvaxValue(AVAX_MILESTONE_HERO_WEI) : (`${DFK_EXTRA_HERO_JEWEL_COST} JEWEL, ${getDfkPaymentLabelForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'honk')}, or ${getDfkPaymentLabelForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'native_ron')}`)}.`);
+      log(`${milestoneHeroOfferConfig.startWaveSkipBonus ? 'Start-wave skip' : 'Milestone'} hero offer unlocked after wave ${milestoneHeroOfferConfig.wave}: hire one level ${milestoneHeroOfferConfig.heroLevel} hero of your choice for ${getMilestoneHeroOfferPaymentLabel(milestoneHeroOfferConfig)}.`);
     }
     if (milestoneBarrierOfferConfig) {
       openMilestoneBarrierOffer(milestoneBarrierOfferConfig);
@@ -23247,11 +23684,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const moosiferGateReady = finalWaveNumber === MOOSIFER_BOSS_WAVE - 1 && !game.moosiferDefeatedThisRun;
     const skyTerrorGateReady = finalWaveNumber === SKY_TERROR_WAVE - 1 && !game.skyTerrorIntroShownForRun;
     const relicWaveCleared = !moosiferGateReady && !skyTerrorGateReady && clearedPlans.some(plan => plan.waveNumber % 7 === 0);
-    let shopOpened = !!(milestoneHeroOfferConfig || milestoneBarrierOfferConfig);
-    if (relicWaveCleared) {
+    let shopOpened = !!(milestoneHeroOfferConfig || milestoneBarrierOfferConfig || (Array.isArray(game.relicChoices) && game.relicChoices.length) || game.dfkGoldSwapOfferOpen);
+    if (!shopOpened && relicWaveCleared) {
       shopOpened = offerRelics(tenWaveSwapReady ? 'wave10' : 'relic');
       if (shopOpened) setInstruction(`Wave ${finalWaveNumber} cleared. Relic shop is open. You can buy one relic or skip.${tenWaveSwapReady ? ' A premium swap is also available.' : ''}`);
-    } else if (tenWaveSwapReady) {
+    } else if (!shopOpened && tenWaveSwapReady) {
       game.relicChoices = [];
       shopOpened = offerRelics('wave10');
       if (shopOpened) setInstruction(`Wave ${finalWaveNumber} cleared. Relic shop is open. You can buy one relic or skip. A premium swap is also available.`);
@@ -23263,7 +23700,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       game.autoStartReadyAt = 0;
       if (els.startWaveBtn) els.startWaveBtn.disabled = true;
       const offerParts = [];
-      if (milestoneHeroOfferConfig) offerParts.push(`hire a level ${milestoneHeroOfferConfig.heroLevel} hero of your choice for ${canUseAvaxRailsPurchases() ? formatAvaxValue(AVAX_MILESTONE_HERO_WEI) : (`${DFK_EXTRA_HERO_JEWEL_COST} JEWEL, ${getDfkPaymentLabelForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'honk')}, or ${getDfkPaymentLabelForJewelAmount(DFK_EXTRA_HERO_JEWEL_COST, 'native_ron')}`)}`);
+      if (milestoneHeroOfferConfig) offerParts.push(`hire a level ${milestoneHeroOfferConfig.heroLevel} hero of your choice for ${getMilestoneHeroOfferPaymentLabel(milestoneHeroOfferConfig)}`);
       if (milestoneBarrierOfferConfig) offerParts.push(`buy ${milestoneBarrierOfferConfig.barrierCount} more barriers for ${canUseAvaxRailsPurchases() ? formatAvaxValue(AVAX_MILESTONE_BARRIER_WEI) : (milestoneBarrierOfferConfig.burnCost.toLocaleString() + ' DFK Gold')}`);
       setInstruction(`Wave ${finalWaveNumber} cleared. Bonus offer: ${offerParts.join(' or ')}.`);
     } else if (!shopOpened) {
@@ -23296,6 +23733,12 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     captureReplayWaveSnapshot(`wave_${finalWaveNumber}_cleared`);
     persistSavedGame('wave_cleared');
     render();
+    };
+    if (maybeStartD20WaveBonus(finalWaveNumber, clearedPlans, continueAfterD20Roll)) {
+      render();
+      return;
+    }
+    continueAfterD20Roll();
   }
 
   function setCountdown(seconds) {
@@ -23363,6 +23806,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       });
     }
     game.relicChoices = [];
+    game.d20FreeRelicPending = false;
     closeDfkgoldSwapOffer();
     markProgress(`${freeRelic ? 'Claimed' : 'Bought'} relic: ${relic.name}.`);
     log(`${freeRelic ? (isFreeStartingRelic ? 'Chose free starting relic' : 'Claimed mythic relic') : 'Bought relic'}: ${relic.name}.`);
@@ -23371,6 +23815,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       game.startingRelicPending = false;
       game.startingRelicClaimed = true;
       prepareNextWave();
+    } else if (openPendingPostRelicMilestoneOffer()) {
+      // The D20 relic reward can coincide with wave-20 reinforcements. Show the offer after the relic is resolved.
     } else {
       setCountdown(WAVE_BREAK_SECONDS);
     }
@@ -23504,6 +23950,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   function updateTower(tower, delta, current) {
     getActiveSlowTotems();
     tickEffects(tower, current);
+    refreshThiefVanishState(tower);
     tower.attackCooldownMs = Math.max(0, tower.attackCooldownMs - delta);
     updateBerserkerGhostTrail(tower, delta, current);
 
@@ -23610,13 +24057,16 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         ? nearestEnemyInRange(tower, Number(tower.range || 1) + (tower.trainingPartnerActive ? MONK_PARTNER_RANGE_BONUS : 0))
         : (tower.type === 'champion_spellbow'
           ? (getPortalPriorityEnemies(1)[0] || null)
-          : nearestEnemyInRange(tower, tower.range)));
+          : (tower.type === 'thief'
+            ? (getThiefBasicTargets(tower)[0] || null)
+            : nearestEnemyInRange(tower, tower.range))));
     if (!target) return;
     let damage = tower.damage;
     if (tower.type === 'seer') damage *= getSeerDamageMultiplier();
     if (tower.type === 'monk' && tower.trainingPartnerActive) damage *= MONK_PARTNER_DAMAGE_MULTIPLIER;
     if (tower.type === 'berserker' && tower.berserkerMoonActive) damage *= 2;
     if (tower.type === 'berserker') damage *= Math.max(1, Number(tower.berserkerFrenzyDamageMult || 1));
+    if (tower.type === 'thief' && isThiefVanished(tower)) damage *= 2;
     if (tower.type === 'champion_sage') damage *= 1.25;
     if (tower.type === 'champion_spellbow') damage *= 1.2;
     if (tower.type === 'archer' && game.modifiers.rangerLine && isBehindWarrior(tower)) damage *= 1.05;
@@ -23624,7 +24074,15 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     if (hasSageChampionMeleeBuff(tower)) damage *= 1.1;
     if (isCasterTowerType(tower.type) && hasLivingChampionOfType('champion_spellbow', tower.id)) damage *= 1.1;
     if (target.debuffs.eagle_nest) damage += 2;
-    damageEnemy(tower, target, damage, `${tower.name} hit ${target.name}`, { key: 'basic_attack', label: 'Basic Attack' });
+    if (tower.type === 'thief') {
+      const thiefTargets = getThiefBasicTargets(tower);
+      thiefTargets.forEach((enemy) => {
+        createAttackLine(tower, enemy, 'thief');
+        damageEnemy(tower, enemy, damage, `${tower.name} used Back Stab`, { key: 'back_stab', label: 'Back Stab' });
+      });
+    } else {
+      damageEnemy(tower, target, damage, `${tower.name} hit ${target.name}`, { key: 'basic_attack', label: 'Basic Attack' });
+    }
     tower.basicAttackCount = (tower.basicAttackCount || 0) + 1;
     if (tower.type === 'warrior' && isAbilityUnlocked(tower, 'gladiator_strike') && tower.basicAttackCount % 18 === 0) {
       const warriorTemplate = TOWER_TEMPLATES.warrior || { damage: 0, hp: 0 };
@@ -24699,6 +25157,8 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       return;
     }
 
+    if (updateConfusedEnemy(enemy, current)) return;
+
     if (updateEnemyStatuePriority(enemy, current)) return;
 
     if (enemy.isFlyingSiege) {
@@ -25319,6 +25779,26 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     return { startedAt, durationMs, until: startedAt + durationMs };
   }
 
+  function createShadowArcEffect(sourceTower, targets, opts = {}) {
+    if (!sourceTower || !Array.isArray(targets) || !targets.length) return null;
+    const startedAt = Number.isFinite(Number(opts.startedAt)) ? Number(opts.startedAt) : now();
+    const durationMs = Number.isFinite(Number(opts.durationMs)) ? Number(opts.durationMs) : 620;
+    createProjectileEffect({
+      kind: 'thief-shadow-arc',
+      centerTileX: sourceTower.x,
+      centerTileY: sourceTower.y,
+      targets: targets
+        .filter(Boolean)
+        .slice(0, THIEF_SHADOW_ARC_MAX_TARGETS)
+        .map((target) => ({ x: target.x, y: target.y, id: target.id || '' })),
+      startedAt,
+      durationMs,
+      until: startedAt + durationMs,
+      maxRadiusTiles: Number.isFinite(Number(opts.maxRadiusTiles)) ? Number(opts.maxRadiusTiles) : 3,
+    });
+    return { startedAt, durationMs, until: startedAt + durationMs };
+  }
+
   function createSeismicWaveEffect(sourceTower, opts = {}) {
     if (!sourceTower) return null;
     const startedAt = Number.isFinite(Number(opts.startedAt)) ? Number(opts.startedAt) : now();
@@ -25778,6 +26258,77 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         continue;
       }
 
+      if (effect.kind === 'thief-shadow-arc') {
+        const centerPos = getTilePixelPosition(effect.centerTileX, effect.centerTileY);
+        if (!centerPos) continue;
+        const centerX = centerPos.left + (centerPos.width / 2);
+        const centerY = centerPos.top + (centerPos.height / 2);
+        const tileSize = Math.max(centerPos.width, centerPos.height);
+        const maxRadiusTiles = Math.max(1, Number(effect.maxRadiusTiles || 3));
+        const radius = tileSize * (0.78 + (maxRadiusTiles * 0.42));
+        const sweepStart = -154;
+        const sweepSpan = 226;
+        const sweepProgress = 1 - Math.pow(1 - progress, 2.4);
+        const arcLength = Math.max(32, 74 + (progress * 54));
+        const headAngle = sweepStart + (sweepSpan * sweepProgress);
+        const tailAngle = headAngle - arcLength;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const startRad = tailAngle * (Math.PI / 180);
+        const endRad = headAngle * (Math.PI / 180);
+        const startX = centerX + (Math.cos(startRad) * radius);
+        const startY = centerY + (Math.sin(startRad) * radius * 0.74);
+        const endX = centerX + (Math.cos(endRad) * radius);
+        const endY = centerY + (Math.sin(endRad) * radius * 0.74);
+        const largeArc = Math.abs(headAngle - tailAngle) > 180 ? 1 : 0;
+        const alpha = Math.max(0, 0.92 - (progress * 0.48));
+        path.setAttribute('d', `M ${startX.toFixed(2)} ${startY.toFixed(2)} A ${radius.toFixed(2)} ${(radius * 0.74).toFixed(2)} 0 ${largeArc} 1 ${endX.toFixed(2)} ${endY.toFixed(2)}`);
+        path.setAttribute('class', 'projectile-effect-shadow-arc-path');
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', `rgba(238, 183, 105, ${alpha.toFixed(3)})`);
+        path.setAttribute('stroke-width', `${Math.max(4, tileSize * 0.085).toFixed(2)}`);
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('filter', 'drop-shadow(0 0 8px rgba(245,184,95,0.92)) drop-shadow(0 0 18px rgba(52,33,62,0.86))');
+        path.setAttribute('opacity', `${alpha.toFixed(3)}`);
+        svg.appendChild(path);
+
+        const innerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        innerPath.setAttribute('d', path.getAttribute('d') || '');
+        innerPath.setAttribute('fill', 'none');
+        innerPath.setAttribute('stroke', `rgba(54, 41, 66, ${Math.max(0, alpha * 0.88).toFixed(3)})`);
+        innerPath.setAttribute('stroke-width', `${Math.max(2, tileSize * 0.04).toFixed(2)}`);
+        innerPath.setAttribute('stroke-linecap', 'round');
+        innerPath.setAttribute('opacity', `${Math.max(0, alpha * 0.94).toFixed(3)}`);
+        svg.appendChild(innerPath);
+
+        const targets = Array.isArray(effect.targets) ? effect.targets : [];
+        targets.forEach((target, targetIndex) => {
+          if (!target || !Number.isFinite(Number(target.x)) || !Number.isFinite(Number(target.y))) return;
+          const pos = getTilePixelPosition(target.x, target.y);
+          const tx = pos.left + (pos.width / 2);
+          const ty = pos.top + (pos.height / 2);
+          const sparkDelay = (targetIndex % 5) * 0.035;
+          const sparkProgress = Math.max(0, Math.min(1, (progress - sparkDelay) / 0.72));
+          if (sparkProgress <= 0) return;
+          const sparkSize = tileSize * (0.28 + (sparkProgress * 0.42));
+          const spark = document.createElement('div');
+          spark.className = 'projectile-effect projectile-effect-shadow-arc-spark';
+          spark.style.position = 'absolute';
+          spark.style.pointerEvents = 'none';
+          spark.style.left = `${tx}px`;
+          spark.style.top = `${ty}px`;
+          spark.style.width = `${sparkSize}px`;
+          spark.style.height = `${sparkSize}px`;
+          spark.style.borderRadius = '50%';
+          spark.style.transform = `translate(-50%, -50%) rotate(${headAngle + (targetIndex * 23)}deg) scaleX(${1.45 + (sparkProgress * 0.38)})`;
+          spark.style.opacity = `${Math.max(0, 0.68 - (sparkProgress * 0.44))}`;
+          spark.style.background = 'radial-gradient(circle, rgba(255,226,145,0.72) 0%, rgba(90,64,86,0.48) 43%, rgba(30,22,38,0) 72%)';
+          spark.style.boxShadow = '0 0 12px rgba(244,181,89,0.54), 0 0 22px rgba(71,48,88,0.66)';
+          spark.style.mixBlendMode = 'screen';
+          els.enemyLayer.appendChild(spark);
+        });
+        continue;
+      }
+
       if (effect.kind === 'dragoon-overpower-spin' || effect.kind === 'dreadknight-big-sword-overpower') {
         const centerPos = getTilePixelPosition(effect.centerTileX, effect.centerTileY);
         if (!centerPos) continue;
@@ -26090,7 +26641,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       const useImageSprite = enemy.isBoss || usePackbocSprite || useBruteSprite;
       const dot = useImageSprite ? document.createElement('img') : document.createElement('div');
       const moosiferRoaring = !!(enemy.isMoosifer && Number(enemy.moosiferRoarUntil || 0) > current);
-      dot.className = `enemy-dot enemy-${enemy.cssClass} enemy-floating${usePackbocSprite ? ' enemy-packboc' : ''}${enemy.attacking ? ' attacking' : ''}${getEnemySlowPercent(enemy) > 0 ? ' enemy-slowed' : ''}${moosiferRoaring ? ' moosifer-roaring' : ''}`;
+      dot.className = `enemy-dot enemy-${enemy.cssClass} enemy-floating${usePackbocSprite ? ' enemy-packboc' : ''}${enemy.attacking ? ' attacking' : ''}${getEnemySlowPercent(enemy) > 0 ? ' enemy-slowed' : ''}${enemy.debuffs?.confused ? ' enemy-confused' : ''}${moosiferRoaring ? ' moosifer-roaring' : ''}`;
       dot.style.left = `${px + offset.x}px`;
       dot.style.top = `${py + offset.y}px`;
       const packbocSizeMult = (enemy.type === 'runner' ? 1.105 : (enemy.type === 'skitter' ? 1.44 : 1.3)) * 0.85;
@@ -26201,10 +26752,14 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       if (getBlindingLightAttackSlowPercent(enemy) > 0 || enemy.debuffs.blinding_light_linger) {
         dot.style.filter = `${dot.style.filter ? dot.style.filter + ' ' : ''}drop-shadow(8px 10px 5px rgba(0,0,0,0.35))`;
       }
+      if (enemy.debuffs?.confused) {
+        dot.style.filter = `${dot.style.filter ? dot.style.filter + ' ' : ''}hue-rotate(250deg) saturate(1.25) drop-shadow(0 0 7px rgba(196,132,255,0.8))`;
+      }
       els.enemyLayer.appendChild(dot);
       const statusBadges = [];
       if (getEnemySlowPercent(enemy) > 0) statusBadges.push(createEnemySlowSnowflake(px + offset.x, py + offset.y, statusBadgeWidth, statusBadgeHeight, enemy.isBoss));
       if (getBlindingLightAttackSlowPercent(enemy) > 0 || enemy.debuffs.blinding_light_linger) statusBadges.push(createEnemyLightOrbBadge(px + offset.x, py + offset.y, statusBadgeWidth, statusBadgeHeight, enemy.isBoss, statusBadges.length));
+      if (enemy.debuffs?.confused) statusBadges.push(createEnemyConfusionBadge(px + offset.x, py + offset.y, statusBadgeWidth, statusBadgeHeight, enemy.isBoss, statusBadges.length));
       statusBadges.forEach(node => els.enemyLayer.appendChild(node));
       if (enemy.hp < enemy.maxHp) {
         const hp = document.createElement('div');
@@ -26325,6 +26880,30 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     return badge;
   }
 
+  function createEnemyConfusionBadge(px, py, visualWidth, visualHeight, isBoss, index = 0) {
+    const badge = document.createElement('div');
+    const size = Math.max(9, Math.round((isBoss ? 0.16 : 0.17) * Math.min(visualWidth, visualHeight)));
+    badge.style.position = 'absolute';
+    badge.style.left = `${Math.round(px - (visualWidth / 2) + Math.max(2, visualWidth * 0.08) + (index * (size + 3)))}px`;
+    badge.style.top = `${Math.round(py - (visualHeight / 2) + Math.max(1, visualHeight * 0.04))}px`;
+    badge.style.width = `${size}px`;
+    badge.style.height = `${size}px`;
+    badge.style.display = 'grid';
+    badge.style.placeItems = 'center';
+    badge.style.borderRadius = '50%';
+    badge.style.pointerEvents = 'none';
+    badge.style.zIndex = isBoss ? '11' : '10';
+    badge.style.color = '#fff0ff';
+    badge.style.fontSize = `${Math.max(8, Math.round(size * 0.86))}px`;
+    badge.style.fontWeight = '1000';
+    badge.style.lineHeight = '1';
+    badge.style.textShadow = '0 0 4px rgba(51,0,86,0.9)';
+    badge.style.background = 'radial-gradient(circle, rgba(245,218,255,0.95) 0%, rgba(181,94,255,0.88) 55%, rgba(66,16,116,0.42) 100%)';
+    badge.style.boxShadow = '0 0 8px rgba(199,121,255,0.95), 0 0 16px rgba(199,121,255,0.42)';
+    badge.textContent = '?';
+    return badge;
+  }
+
   function applyVersionStamp() {
     document.documentElement.setAttribute('data-app-version', APP_VERSION);
     document.title = `NFT Defender ${APP_VERSION}`;
@@ -26372,10 +26951,23 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const waveGoldMultiplier = Math.max(1, Number(enemy.waveGoldMultiplier || 1));
     if (waveGoldMultiplier > 1) jewel *= waveGoldMultiplier;
     if (enemy.killedBy === 'pirate') jewel *= (1 + game.modifiers.pirateSteal);
+    let backStabBonusGold = 0;
+    if (enemy.killedBy === 'thief' && String(enemy.lastHitMethod || '') === 'back_stab') {
+      const bonusWave = Math.max(0, Math.floor(Number(enemy.sourceWaveNumber || game.waveNumber || 0)));
+      backStabBonusGold = Math.round(bonusWave * THIEF_BACK_STAB_GOLD_PER_WAVE);
+      if (backStabBonusGold > 0 && enemy.lastHitTowerId) {
+        const thiefTower = getTowerById(enemy.lastHitTowerId);
+        if (thiefTower && thiefTower.type === 'thief') {
+          thiefTower.thiefBackStabGoldEarned = Math.max(0, Number(thiefTower.thiefBackStabGoldEarned || 0)) + backStabBonusGold;
+          thiefTower.thiefBackStabKills = Math.max(0, Number(thiefTower.thiefBackStabKills || 0)) + 1;
+        }
+      }
+    }
     const liveWaveGoldBonusMultiplier = getLiveWaveGoldBonusMultiplier();
     if (liveWaveGoldBonusMultiplier > 1) jewel *= liveWaveGoldBonusMultiplier;
-    game.jewel += jewel;
-    if (jewel > 0) pulseGoldPill();
+    game.jewel += jewel + backStabBonusGold;
+    if (jewel > 0 || backStabBonusGold > 0) pulseGoldPill();
+    if (backStabBonusGold > 0) createHitFlash(enemy.x, enemy.y, 'thief', `+${formatJewel(backStabBonusGold)} Back Stab`, { smallText: true, centerText: true, duration: 650 });
     updateQuestMetric('killsTotal', 1);
     updateWeeklyBountyMetric('killsTotal', 1);
     if (enemy.isBoss) {
@@ -26411,9 +27003,9 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     if (portalPct < 0.75) updateWeeklyBountyMetric('killsPortalBelow75', 1);
     if (portalPct < 0.25) updateWeeklyBountyMetric('killsPortalBelow25', 1);
     if (String(enemy.killedBy || '').startsWith('champion_')) updateWeeklyBountyMetric('championKills', 1);
-    updateQuestMetric('goldEarned', jewel);
+    updateQuestMetric('goldEarned', jewel + backStabBonusGold);
     const liveWaveGoldBonusLabel = getLiveWaveGoldBonusLabel();
-    log(`${enemy.name} died. +${formatJewel(jewel)} Gold${waveGoldMultiplier > 1 ? ` (${waveGoldMultiplier}x Wave RNG gold)` : ''}${liveWaveGoldBonusLabel ? ` (${liveWaveGoldBonusLabel} live bonus)` : ''}.`);
+    log(`${enemy.name} died. +${formatJewel(jewel)} Gold${backStabBonusGold > 0 ? `, +${formatJewel(backStabBonusGold)} Back Stab gold` : ''}${waveGoldMultiplier > 1 ? ` (${waveGoldMultiplier}x Wave RNG gold)` : ''}${liveWaveGoldBonusLabel ? ` (${liveWaveGoldBonusLabel} live bonus)` : ''}.`);
     if (enemy.isMoosifer) handleMoosiferDefeated(enemy).catch((error) => console.warn('Moosifer defeat handling failed.', error));
   }
 
@@ -26526,7 +27118,10 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       enemy.lastHitMethod = String(damageMethod?.key || 'basic_attack');
       const methodKey = String(damageMethod?.key || 'basic_attack');
       const methodLabel = String(damageMethod?.label || 'Basic Attack');
-      recordTowerDamage(sourceTower, appliedDamage, methodKey, methodLabel);
+      const damageReportOptions = sourceTower.type === 'thief'
+        ? { invisible: isThiefVanished(sourceTower) }
+        : null;
+      recordTowerDamage(sourceTower, appliedDamage, methodKey, methodLabel, damageReportOptions);
       updateQuestMetric('damageTotal', appliedDamage);
       if (!sourceTower.isSatellite && !isStatueTower(sourceTower)) updateWeeklyBountyMetric('heroDamage', appliedDamage);
       applyMonkDarkSiphon(sourceTower, appliedDamage);
@@ -27173,6 +27768,27 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         showBanner('See the Moon', 900);
         return true;
       },
+      twin_fang() {
+        return false;
+      },
+      shadow_arc() {
+        const targets = game.enemies
+          .filter((enemy) => enemy.hp > 0 && dist(enemy, tower) <= 3)
+          .sort((a, b) => portalDistance(a) - portalDistance(b))
+          .slice(0, THIEF_SHADOW_ARC_MAX_TARGETS);
+        if (!targets.length) return false;
+        const shadowDamage = Math.max(1, Number(tower.damage || 0) * THIEF_SHADOW_ARC_DAMAGE_MULTIPLIER) * powerMult;
+        createShadowArcEffect(tower, targets);
+        createTileFlashArea(targets.map((enemy) => ({ x: enemy.x, y: enemy.y })), 'thief');
+        targets.forEach((enemy) => {
+          damageEnemy(tower, enemy, shadowDamage, `${tower.name} used Shadow Arc`, { key: 'shadow_arc', label: 'Shadow Arc' });
+          tryApplyShadowArcConfusion(enemy, tower);
+        });
+        return true;
+      },
+      vanish() {
+        return false;
+      },
     };
     const ok = handlers[abilityKey]?.(ctx);
     if (ok === 'placement') return false;
@@ -27438,7 +28054,36 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     .start-wave-choice-btn { min-height: 76px; padding: 10px 8px; border: 1px solid rgba(245, 224, 120, 0.28); border-radius: 8px; background: rgba(18, 22, 42, 0.92); color: #f7f0d3; text-align: center; cursor: pointer; }
     .start-wave-choice-btn span { display: block; font-weight: 800; font-size: 17px; }
     .start-wave-choice-btn small { display: block; margin-top: 6px; font-size: 11px; line-height: 1.25; color: rgba(239, 232, 200, 0.78); }
-    .start-wave-choice-btn.is-active { border-color: #fff16b; background: rgba(132, 101, 14, 0.94); box-shadow: 0 0 0 1px rgba(255, 241, 107, 0.28), 0 0 18px rgba(255, 211, 62, 0.25); }
+    .start-wave-choice-btn.is-active {
+      border-color: rgba(255, 247, 123, 0.96) !important;
+      background-image:
+        linear-gradient(180deg, rgba(255, 241, 98, 0.16), rgba(255, 241, 98, 0.03)),
+        var(--button-earth-bg-active) !important;
+      transform: translateY(-1px);
+      box-shadow:
+        0 0 0 2px rgba(255, 246, 117, 0.36),
+        0 0 16px rgba(255, 231, 92, 0.24),
+        inset 0 1px 0 rgba(255, 255, 202, 0.28),
+        inset 0 -7px 13px rgba(39, 34, 10, 0.22) !important;
+    }
+    .start-wave-choice-grid:has(.start-wave-choice-btn.is-active) .start-wave-choice-btn:not(.is-active) {
+      border-color: rgba(126, 117, 51, 0.52) !important;
+      background-image:
+        linear-gradient(180deg, rgba(5, 7, 9, 0.32), rgba(5, 7, 9, 0.44)),
+        var(--button-earth-bg-secondary) !important;
+      color: rgba(229, 222, 177, 0.74) !important;
+      filter: brightness(0.72) saturate(0.75);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 244, 170, 0.08),
+        inset 0 -9px 14px rgba(14, 12, 5, 0.34),
+        0 0 0 1px rgba(14, 12, 5, 0.24) !important;
+    }
+    .start-wave-choice-grid:has(.start-wave-choice-btn.is-active) .start-wave-choice-btn:not(.is-active) small {
+      color: rgba(225, 216, 168, 0.62) !important;
+    }
+    .start-wave-choice-grid:has(.start-wave-choice-btn.is-active) .start-wave-choice-btn:not(.is-active):hover:not(:disabled) {
+      filter: brightness(0.88) saturate(0.88);
+    }
     .start-wave-choice-btn.is-submitting,
     .start-wave-choice-btn:disabled { cursor: wait; opacity: 0.72; filter: saturate(0.75); }
     .winston-admin-card { width: min(920px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
@@ -27614,7 +28259,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
         captureTrackedRunNow('disconnected');
       }
     } else {
-      const autoLoadKey = `${String(detail.address || '').toLowerCase()}::${Number(detail.activeChainId || 0)}`;
+      const autoLoadKey = String(detail.address || '').toLowerCase();
       if (game.walletHeroAutoLoadedKey !== autoLoadKey) {
         loadWalletHeroes(false).catch((error) => { console.error(error); });
       }
@@ -27805,11 +28450,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     closeNewsModal();
   });
   els.newsPrevBtn?.addEventListener('click', () => {
-    game.newsPageIndex = Math.max(0, Number(game.newsPageIndex || 0) - 1);
+    game.newsPageIndex = Math.min(NEWS_ITEMS.length - 1, Number(game.newsPageIndex || 0) + 1);
     renderNewsModal();
   });
   els.newsNextBtn?.addEventListener('click', () => {
-    game.newsPageIndex = Math.min(1, Number(game.newsPageIndex || 0) + 1);
+    game.newsPageIndex = Math.max(0, Number(game.newsPageIndex || 0) - 1);
     renderNewsModal();
   });
   els.newsModal?.addEventListener('click', (event) => {
@@ -27819,7 +28464,9 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     const newsParam = new URLSearchParams(window.location.search).get('news');
     if (newsParam) {
       const normalizedNewsParam = String(newsParam || '').trim().toLowerCase();
-      game.newsPageIndex = normalizedNewsParam.includes('release') || normalizedNewsParam.includes('history') ? 1 : 0;
+      const itemIndex = NEWS_ITEMS.findIndex((item) => String(item && item.id || '').toLowerCase() === normalizedNewsParam);
+      game.newsPageIndex = itemIndex >= 0 ? itemIndex : (normalizedNewsParam.includes('moosifer') ? NEWS_ITEMS.findIndex((item) => item.id === 'moosifer') : 0);
+      if (game.newsPageIndex < 0) game.newsPageIndex = 0;
       setTimeout(() => openNewsModal(), 350);
     }
   } catch (error) {}  els.questsBtn?.addEventListener('click', () => {
