@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.reward-claims-admin]
 verify_jwt = false
+
+[functions.record-hero-shop-purchase]
+verify_jwt = false

@@ -378,7 +378,7 @@
 <div class="wallet-panel-body wallet-hero-panel-body" id="walletHeroBonusPanelBody">
 <div class="wallet-hero-bonus-header">
 <div class="wallet-hero-menu-title-wrap"><span class="wallet-hero-menu-title">NFTs</span><span aria-label="NFT bonus details" class="wallet-hero-info-icon" id="walletHeroBonusInfo" role="button" tabindex="0">i<span class="wallet-hero-info-tooltip" role="tooltip"><span class="wallet-hero-info-heading">NFT Bonus Info</span><span class="wallet-hero-info-auto-select"><span class="wallet-hero-info-auto-title">Auto-select uses this schema to pick your NFTs:</span><span class="wallet-hero-info-auto-path">gen0 with the highest rarity and highest level &gt; gen0 with highest rarity &gt; gen0 with highest level &gt; Highest rarity and highest level &gt; highest rarity &gt; highest level</span></span><span class="wallet-hero-info-row wallet-hero-info-row-gen0"><span class="wallet-hero-info-name">Gen0</span><span class="wallet-hero-info-value">+20% damage, +10% attack speed, +10% life, +30% healing</span></span><span class="wallet-hero-info-row"><span class="wallet-hero-info-name">Common</span><span class="wallet-hero-info-value">No rarity stat bonus</span></span><span class="wallet-hero-info-row wallet-hero-info-row-uncommon"><span class="wallet-hero-info-name">Uncommon</span><span class="wallet-hero-info-value">+5% damage and HP</span></span><span class="wallet-hero-info-row wallet-hero-info-row-rare"><span class="wallet-hero-info-name">Rare</span><span class="wallet-hero-info-value">+10% damage and HP</span></span><span class="wallet-hero-info-row wallet-hero-info-row-legendary"><span class="wallet-hero-info-name">Legendary</span><span class="wallet-hero-info-value">+15% damage and HP</span></span><span class="wallet-hero-info-row wallet-hero-info-row-mythic"><span class="wallet-hero-info-name">Mythic</span><span class="wallet-hero-info-value">+20% damage and HP</span></span></span></span></div>
-<div class="wallet-hero-menu-actions"><button class="wallet-btn secondary wallet-hero-refresh-btn" id="refreshWalletHeroesBtn" type="button">Refresh NFTs</button>
+<div class="wallet-hero-menu-actions"><button class="wallet-btn secondary wallet-hero-refresh-btn" id="openHeroShopBtn" type="button">Hero Shop</button><button class="wallet-btn secondary wallet-hero-refresh-btn" id="refreshWalletHeroesBtn" type="button">Refresh NFTs</button>
 <button class="wallet-btn secondary wallet-hero-refresh-btn" id="closeWalletHeroesModalBtn" type="button">Close</button></div>
 </div>
 <div class="wallet-tracking-summary" id="walletHeroBonusStatus">Connect a wallet on DFK Chain to load NFTs.</div>
@@ -533,6 +533,30 @@
 <div class="transfer-heroes-footer">
 <button class="small-action" id="confirmTransferHeroesBtn" type="button">Send selected heroes</button>
 </div>
+</div>
+</div>
+<div aria-hidden="true" class="transfer-heroes-modal hero-shop-modal hidden" id="heroShopModal">
+<div aria-labelledby="heroShopTitle" aria-modal="true" class="transfer-heroes-modal-card hero-shop-modal-card panel" role="dialog">
+<div class="transfer-heroes-header">
+<div>
+<div class="intro-kicker">Treasury Hero Shop</div>
+<h2 id="heroShopTitle">Buy Heroes</h2>
+</div>
+<button aria-label="Close hero shop" class="intro-close" id="closeHeroShopBtn" type="button">×</button>
+</div>
+<div class="wallet-tracking-summary hero-shop-status" id="heroShopStatus">Connect a wallet to buy heroes from the shop wallet.</div>
+<div class="hero-shop-toolbar">
+<button class="wallet-btn secondary" id="refreshHeroShopBtn" type="button">Refresh Shop</button>
+<label class="transfer-heroes-field transfer-heroes-field-sort">
+<span>Pay with</span>
+<select class="transfer-heroes-input transfer-heroes-select" id="heroShopCurrency">
+<option value="RON">RON</option>
+<option value="JEWEL">JEWEL</option>
+<option value="AVAX">AVAX</option>
+</select>
+</label>
+</div>
+<div class="hero-shop-body" id="heroShopBody"></div>
 </div>
 </div>
 <div aria-hidden="true" class="intro-modal hidden" id="introModal">

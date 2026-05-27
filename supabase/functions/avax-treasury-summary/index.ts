@@ -272,7 +272,7 @@ function getKindBucket(kindValue: unknown) {
   const kind = normalizeKind(kindValue);
   if (['entry_fee', 'bundle', 'bundle_purchase', 'run_bundle', 'paid_bundle'].includes(kind)) return 'entry';
   if (['gold_swap', 'jewel_gold_swap'].includes(kind)) return 'gold';
-  if (['hero_hire', 'extra_hero', 'milestone_hero_hire', 'jewel_extra_hero', 'jewel_milestone_hero_hire'].includes(kind)) return 'hero';
+  if (['hero_hire', 'extra_hero', 'milestone_hero_hire', 'jewel_extra_hero', 'jewel_milestone_hero_hire', 'hero_shop_purchase'].includes(kind)) return 'hero';
   return 'other';
 }
 

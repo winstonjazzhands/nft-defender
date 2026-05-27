@@ -1144,6 +1144,7 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     trackedRunsBtn: document.getElementById('trackedRunsBtn'),
     knownRelicsBtn: document.getElementById('knownRelicsBtn'),
     transferHeroesBtn: document.getElementById('transferHeroesBtn'),
+    openHeroShopBtn: document.getElementById('openHeroShopBtn'),
     heroesBtn: document.getElementById('heroesBtn'),
     introModal: document.getElementById('introModal'),
     bountyModal: document.getElementById('bountyModal'),
@@ -1183,6 +1184,12 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     transferHeroesSelectAllBtn: document.getElementById('transferHeroesSelectAllBtn'),
     transferHeroesClearBtn: document.getElementById('transferHeroesClearBtn'),
     confirmTransferHeroesBtn: document.getElementById('confirmTransferHeroesBtn'),
+    heroShopModal: document.getElementById('heroShopModal'),
+    heroShopBody: document.getElementById('heroShopBody'),
+    heroShopStatus: document.getElementById('heroShopStatus'),
+    heroShopCurrency: document.getElementById('heroShopCurrency'),
+    refreshHeroShopBtn: document.getElementById('refreshHeroShopBtn'),
+    closeHeroShopBtn: document.getElementById('closeHeroShopBtn'),
     eliteWaveModal: document.getElementById('eliteWaveModal'),
     eliteWaveBody: document.getElementById('eliteWaveBody'),
     eliteWaveOkBtn: document.getElementById('eliteWaveOkBtn'),
@@ -1433,6 +1440,12 @@ const BIG_ASS_SWORD_IMAGE_PATH = 'assets/big_ass_sword.png';
     transferHeroesPage: 1,
     transferHeroesPageSize: 24,
     transferHeroSort: 'level_desc',
+    heroShopOpen: false,
+    heroShopBusy: false,
+    heroShopLoadPending: false,
+    heroShopRoster: [],
+    heroShopCurrency: 'RON',
+    heroShopStatus: '',
     walletHeroExpandedTypes: {},
     walletHeroSearch: {},
     walletHeroLoadPending: false,
@@ -2912,12 +2925,14 @@ function hasVisibleIntroStyleModal() {
     'continueOfferModal',
     'guestConnectConfirmModal',
     'seerIntroModal',
+    'newsModal',
     'startModeModal',
     'championModal',
     'championInfoModal',
     'championLockModal',
     'championEarlyDeployModal',
     'rewardPayoutNoticeModal',
+    'heroShopModal',
   ];
   return ids.some((id) => {
     const el = document.getElementById(id);
@@ -3353,6 +3368,8 @@ function formatQuestResetCountdown(dateKey) {
   const DFK_RON_TREASURY_ADDRESS = String(window.DFK_RON_TREASURY_ADDRESS || DFK_JEWEL_TREASURY_ADDRESS).trim().toLowerCase();
   const DFK_CREATE_TOKEN_SESSION_FUNCTION = window.DFK_SUPABASE_CREATE_DFK_TOKEN_SESSION_FUNCTION || 'create-dfk-token-session';
   const DFK_VERIFY_TOKEN_PAYMENT_FUNCTION = window.DFK_SUPABASE_VERIFY_DFK_TOKEN_PAYMENT_FUNCTION || 'verify-dfk-token-payment';
+  const HERO_SHOP_WALLET_ADDRESS = String(window.DFK_HERO_SHOP_WALLET || DFK_JEWEL_TREASURY_ADDRESS).trim().toLowerCase();
+  const HERO_SHOP_RECORD_PURCHASE_FUNCTION = window.DFK_SUPABASE_RECORD_HERO_SHOP_PURCHASE_FUNCTION || 'record-hero-shop-purchase';
   const DFK_JEWEL_GOLD_SWAP_WEI = '1000000000000000000';
   const DFK_RON_GOLD_SWAP_WEI = String(window.DFK_RON_GOLD_SWAP_WEI || ronToWei(RON_PER_JEWEL_PURCHASE));
   const DFK_HONK_GOLD_SWAP_AMOUNT = 0.3;
@@ -13451,6 +13468,214 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
     } finally {
       game.transferHeroesBusy = false;
       renderTransferHeroesModal();
+    }
+  }
+
+  function normalizeHeroShopCurrency(value) {
+    const text = String(value || '').trim().toUpperCase();
+    return text === 'AVAX' || text === 'JEWEL' || text === 'RON' ? text : 'RON';
+  }
+
+  function getHeroShopJewelPrice(hero) {
+    const rarity = Math.max(0, Math.min(4, Number(hero && hero.rarityId != null ? hero.rarityId : hero?.rarity || 0) || 0));
+    const level = Math.max(1, Number(hero && hero.level || 1) || 1);
+    const rarityBase = [1, 2, 4, 8, 12][rarity] || 1;
+    return Math.max(1, Math.round((rarityBase + level * 0.05) * 100) / 100);
+  }
+
+  function getHeroShopPrice(hero, currency = game.heroShopCurrency) {
+    const resolvedCurrency = normalizeHeroShopCurrency(currency);
+    const jewelAmount = getHeroShopJewelPrice(hero);
+    if (resolvedCurrency === 'RON') {
+      const ronAmount = Math.round(jewelAmount * RON_PER_JEWEL_PURCHASE * 1000) / 1000;
+      return { currency: 'RON', asset: 'native_ron', amount: ronAmount, wei: ronToWei(ronAmount), label: `${ronAmount.toLocaleString(undefined, { maximumFractionDigits: 3 })} RON` };
+    }
+    if (resolvedCurrency === 'AVAX') {
+      const wei = getAvaxWeiForJewelAmount(jewelAmount);
+      return { currency: 'AVAX', asset: 'native_avax', amount: jewelAmount, wei, label: formatAvaxValue(wei) };
+    }
+    return { currency: 'JEWEL', asset: 'native_jewel', amount: jewelAmount, wei: getDfkPaymentWeiForJewelAmount(jewelAmount, 'native_jewel'), label: `${jewelAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} JEWEL` };
+  }
+
+  function normalizeHeroShopHero(rawHero) {
+    const hero = rawHero && typeof rawHero === 'object' ? rawHero : {};
+    const classId = Number(hero.classId ?? hero.class_id ?? hero.mainClass ?? NaN);
+    const rarityId = Number(hero.rarityId ?? hero.rarity_id ?? hero.rarity ?? 0);
+    const chainId = Number(hero.chainId ?? hero.chain_id ?? 53935);
+    const className = hero.className || hero.class_name || getDfKClassName(classId);
+    const type = String(hero.type || DFK_CLASS_TO_SLOT[classId] || '').trim().toLowerCase();
+    return {
+      ...hero,
+      id: String(hero.heroId || hero.hero_id || hero.normalizedId || hero.id || '').trim(),
+      normalizedId: String(hero.normalizedId || hero.heroId || hero.hero_id || hero.id || '').trim(),
+      chainId,
+      chainName: hero.chainName || hero.chain_name || (chainId === 53935 ? 'dfk' : 'wallet'),
+      classId,
+      className,
+      type,
+      rarityId,
+      rarityName: hero.rarityName || hero.rarity_name || getDfKRarityName(rarityId),
+      level: Math.max(1, Number(hero.level || 1) || 1),
+      eligible: hero.eligible !== false,
+    };
+  }
+
+  function setHeroShopStatus(message) {
+    game.heroShopStatus = String(message || '');
+    if (els.heroShopStatus) els.heroShopStatus.textContent = game.heroShopStatus;
+  }
+
+  function renderHeroShopModal() {
+    if (!els.heroShopBody) return;
+    const currency = normalizeHeroShopCurrency(game.heroShopCurrency);
+    if (els.heroShopCurrency && els.heroShopCurrency.value !== currency) els.heroShopCurrency.value = currency;
+    if (els.refreshHeroShopBtn) els.refreshHeroShopBtn.disabled = !!game.heroShopLoadPending || !!game.heroShopBusy;
+    if (!getConnectedWalletAddress()) setHeroShopStatus('Connect a wallet to buy heroes from the shop wallet.');
+    else if (game.heroShopBusy) setHeroShopStatus('Waiting for wallet confirmation...');
+    else if (game.heroShopLoadPending) setHeroShopStatus('Loading treasury heroes...');
+    else if (game.heroShopStatus) setHeroShopStatus(game.heroShopStatus);
+    const heroes = Array.isArray(game.heroShopRoster) ? game.heroShopRoster : [];
+    if (!heroes.length) {
+      els.heroShopBody.innerHTML = `<div class="hero-shop-empty">${game.heroShopLoadPending ? 'Loading shop inventory...' : 'No DFK Chain heroes are loaded from the shop wallet yet. Add heroes to the shop wallet, then refresh.'}</div>`;
+      return;
+    }
+    els.heroShopBody.innerHTML = heroes.map((hero) => {
+      const price = getHeroShopPrice(hero, currency);
+      const jewel = getHeroShopPrice(hero, 'JEWEL');
+      const ron = getHeroShopPrice(hero, 'RON');
+      const avax = getHeroShopPrice(hero, 'AVAX');
+      const imageSrc = getWalletHeroImage(hero);
+      return `<div class="hero-shop-card">
+        <span class="hero-shop-card-art"><img src="${escapeHtml(imageSrc)}" alt="Hero ${escapeHtml(String(hero.id))}" loading="lazy" /></span>
+        <span class="hero-shop-card-main">
+          <span class="hero-shop-card-title">Hero #${escapeHtml(String(hero.id))} · ${escapeHtml(hero.className || 'Hero')}</span>
+          <span class="hero-shop-card-meta">${escapeHtml(hero.rarityName || 'Unknown')} · Level ${escapeHtml(String(hero.level || 1))} · ${escapeHtml(getWalletHeroSourceBadge(hero))}</span>
+          <span class="hero-shop-card-prices"><span class="hero-shop-price-pill">${escapeHtml(ron.label)}</span><span class="hero-shop-price-pill">${escapeHtml(jewel.label)}</span><span class="hero-shop-price-pill">${escapeHtml(avax.label)}</span></span>
+          <button class="wallet-btn secondary hero-shop-buy-btn" type="button" data-hero-shop-buy="${escapeHtml(String(hero.id))}">Buy for ${escapeHtml(price.label)}</button>
+        </span>
+      </div>`;
+    }).join('');
+    Array.from(els.heroShopBody.querySelectorAll('[data-hero-shop-buy]')).forEach((button) => {
+      button.disabled = !!game.heroShopBusy || !getConnectedWalletAddress();
+      button.addEventListener('click', () => {
+        const heroId = button.getAttribute('data-hero-shop-buy') || '';
+        buyHeroShopHero(heroId).catch((error) => {
+          console.error('Hero shop purchase failed', error);
+          const message = error && error.message ? error.message : 'Hero shop purchase failed.';
+          setHeroShopStatus(message);
+          showBanner(message, 2600);
+          renderHeroShopModal();
+        });
+      });
+    });
+    Array.from(els.heroShopBody.querySelectorAll('.hero-shop-card')).forEach((card) => {
+      const img = card.querySelector('img');
+      const heroId = card.querySelector('[data-hero-shop-buy]')?.getAttribute('data-hero-shop-buy') || '';
+      const hero = heroes.find((entry) => String(entry.id) === String(heroId));
+      if (hero && img) img.addEventListener('error', () => handleWalletHeroImageError(img, hero), { once: false });
+    });
+  }
+
+  async function loadHeroShopInventory(force = false) {
+    if (game.heroShopLoadPending) return game.heroShopRoster || [];
+    if (!force && Array.isArray(game.heroShopRoster) && game.heroShopRoster.length) return game.heroShopRoster;
+    game.heroShopLoadPending = true;
+    setHeroShopStatus('Loading treasury heroes...');
+    renderHeroShopModal();
+    try {
+      const payload = await callSupabaseFunctionJson('wallet-heroes', { address: HERO_SHOP_WALLET_ADDRESS, chain: 'dfk' });
+      const heroes = Array.isArray(payload.heroes) ? payload.heroes.map(normalizeHeroShopHero).filter((hero) => hero.id && Number(hero.chainId) === 53935) : [];
+      heroes.sort((a, b) => (Number(b.rarityId || 0) - Number(a.rarityId || 0)) || (Number(b.level || 0) - Number(a.level || 0)) || getWalletHeroNumericId(a) - getWalletHeroNumericId(b));
+      game.heroShopRoster = heroes;
+      setHeroShopStatus(heroes.length ? `${heroes.length} treasury hero${heroes.length === 1 ? '' : 'es'} available. Purchases are recorded for fulfillment from the shop wallet.` : 'No DFK Chain heroes found in the shop wallet.');
+      return heroes;
+    } catch (error) {
+      game.heroShopRoster = [];
+      setHeroShopStatus(error && error.message ? error.message : 'Could not load hero shop inventory.');
+      throw error;
+    } finally {
+      game.heroShopLoadPending = false;
+      renderHeroShopModal();
+    }
+  }
+
+  function closeHeroShopModal() {
+    game.heroShopOpen = false;
+    if (!els.heroShopModal) return;
+    els.heroShopModal.classList.add('hidden');
+    els.heroShopModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function openHeroShopModal() {
+    closeTransferHeroesModal();
+    closeIntroModal();
+    closeBountyModal();
+    closeQuestsModal();
+    closeTrackedRunsModal();
+    closeKnownRelicsModal();
+    game.heroShopOpen = true;
+    if (els.heroShopModal) {
+      els.heroShopModal.classList.remove('hidden');
+      els.heroShopModal.setAttribute('aria-hidden', 'false');
+    }
+    renderHeroShopModal();
+    loadHeroShopInventory(false).catch(() => null);
+  }
+
+  async function recordHeroShopPurchase(hero, price, payment) {
+    return callSupabaseFunctionJson(HERO_SHOP_RECORD_PURCHASE_FUNCTION, {
+      buyerWallet: normalizeAddress(payment && payment.walletAddress || getConnectedWalletAddress()),
+      shopWallet: HERO_SHOP_WALLET_ADDRESS,
+      heroId: String(hero.id),
+      txHash: payment && payment.txHash,
+      paymentSessionId: payment && payment.paymentSessionId,
+      paymentCurrency: price.currency,
+      paymentAsset: price.asset,
+      expectedAmountWei: String(price.wei || '0'),
+      hero: {
+        id: String(hero.id),
+        chainId: Number(hero.chainId || 53935),
+        chainName: String(hero.chainName || 'dfk'),
+        className: String(hero.className || ''),
+        rarityName: String(hero.rarityName || ''),
+        level: Number(hero.level || 1),
+      },
+      metadata: { source: 'hero_shop_modal' },
+    });
+  }
+
+  async function buyHeroShopHero(heroId) {
+    if (game.heroShopBusy) return;
+    const hero = (Array.isArray(game.heroShopRoster) ? game.heroShopRoster : []).find((entry) => String(entry.id) === String(heroId));
+    if (!hero) throw new Error('Hero is no longer available in the shop.');
+    const price = getHeroShopPrice(hero, game.heroShopCurrency);
+    game.heroShopBusy = true;
+    renderHeroShopModal();
+    try {
+      if (!getConnectedWalletAddress()) throw new Error('Connect wallet first.');
+      let payment = null;
+      const label = `Hero #${hero.id} ${hero.className || 'hero'}`;
+      const metadata = {
+        heroShop: true,
+        shopWallet: HERO_SHOP_WALLET_ADDRESS,
+        heroId: String(hero.id),
+        heroClass: String(hero.className || ''),
+        heroRarity: String(hero.rarityName || ''),
+        heroLevel: Number(hero.level || 1),
+        paymentCurrency: price.currency,
+      };
+      if (price.currency === 'AVAX') {
+        payment = await performAvaxTreasuryPurchase('hero_shop_purchase', price.wei, label, metadata);
+      } else {
+        payment = await performDfkJewelTrade('hero_shop_purchase', price.wei, label, { ...metadata, paymentAsset: price.asset });
+      }
+      await recordHeroShopPurchase(hero, price, payment);
+      setHeroShopStatus(`Purchased Hero #${hero.id}. Payment recorded and awaiting shop wallet transfer.`);
+      showBanner(`Hero #${hero.id} purchase recorded. Awaiting transfer from shop wallet.`, 3600);
+      await loadHeroShopInventory(true).catch(() => null);
+    } finally {
+      game.heroShopBusy = false;
+      renderHeroShopModal();
     }
   }
 
@@ -28467,7 +28692,7 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
       const itemIndex = NEWS_ITEMS.findIndex((item) => String(item && item.id || '').toLowerCase() === normalizedNewsParam);
       game.newsPageIndex = itemIndex >= 0 ? itemIndex : (normalizedNewsParam.includes('moosifer') ? NEWS_ITEMS.findIndex((item) => item.id === 'moosifer') : 0);
       if (game.newsPageIndex < 0) game.newsPageIndex = 0;
-      setTimeout(() => openNewsModal(), 350);
+      setTimeout(() => openNewsModal(), 750);
     }
   } catch (error) {}  els.questsBtn?.addEventListener('click', () => {
     openQuestsModal();
@@ -28828,6 +29053,11 @@ document.addEventListener('click', function dfkOpenNewsAfterConnectOrGuest(event
   els.closeKnownRelicsBtn?.addEventListener('click', closeKnownRelicsModal);
   els.closeTransferHeroesBtn?.addEventListener('click', closeTransferHeroesModal);
   els.transferHeroesModal?.addEventListener('click', (event) => { if (event.target === els.transferHeroesModal) closeTransferHeroesModal(); });
+  els.openHeroShopBtn?.addEventListener('click', (event) => { swallowModalEvent(event); openHeroShopModal(); });
+  els.closeHeroShopBtn?.addEventListener('click', closeHeroShopModal);
+  els.heroShopModal?.addEventListener('click', (event) => { if (event.target === els.heroShopModal) closeHeroShopModal(); });
+  els.refreshHeroShopBtn?.addEventListener('click', () => { loadHeroShopInventory(true).catch((error) => console.error(error)); });
+  els.heroShopCurrency?.addEventListener('change', (event) => { game.heroShopCurrency = normalizeHeroShopCurrency(event.target && event.target.value); renderHeroShopModal(); });
   els.transferHeroesSearch?.addEventListener('input', (event) => { game.transferHeroSearch = String((event.target && event.target.value) || ''); game.transferHeroesPage = 1; renderTransferHeroesModal(); });
   els.transferHeroesSort?.addEventListener('change', (event) => { game.transferHeroSort = String((event.target && event.target.value) || 'level_desc'); game.transferHeroesPage = 1; renderTransferHeroesModal(); });
   els.transferHeroesRecipient?.addEventListener('input', (event) => { game.transferHeroRecipient = String((event.target && event.target.value) || '').trim(); renderTransferHeroesModal(); });
